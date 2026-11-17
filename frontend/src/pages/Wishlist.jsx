@@ -1,0 +1,76 @@
+import { ShoppingBag, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { Link } from 'react-router'
+import { api, errorMessage, useApi } from '../api.js'
+import { useCart } from '../CartContext.jsx'
+import { Loading, PageMessage } from '../components/Feedback.jsx'
+import { formatPrice, ProductImage } from '../components/ProductGrid.jsx'
+
+export default function Wishlist() {
+  const { data, error, loading, retry } = useApi('/wishlist')
+  const { addItem } = useCart()
+  const [pending, setPending] = useState(false)
+  const [notice, setNotice] = useState(null)
+
+  async function removeProduct(product, moveToCart = false) {
+    setNotice(null)
+
+    if (moveToCart) {
+      const message = addItem(product, { onlyIfMissing: true })
+      if (message) {
+        setNotice({ error: true, message })
+        return
+      }
+    }
+
+    setPending(true)
+    try {
+      await api.delete(`/wishlist/${product._id}`)
+      setNotice({ message: moveToCart ? 'Moved to your cart.' : 'Removed from your wishlist.' })
+      retry()
+    } catch {
+      const message = moveToCart
+        ? 'The item is in your cart. We couldn’t remove it from your wishlist. Try again.'
+        : 'We couldn’t remove this item. Try again.'
+      setNotice({ error: true, message })
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <section>
+      <div className="page-heading"><h1>Wishlist</h1></div>
+      {notice && <p className={notice.error ? 'form-error mb-4' : 'mb-4'} role={notice.error ? 'alert' : 'status'}>{notice.message}</p>}
+      {loading && <Loading label="Loading saved products…" />}
+      {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load your wishlist.')}</PageMessage>}
+      {data?.products.length === 0 && (
+        <PageMessage linkTo="/products" linkLabel="Browse products">Your wishlist is empty.</PageMessage>
+      )}
+      {data?.products.length > 0 && (
+        <ul className="shopping-list" aria-label="Saved products">
+          {data.products.map((product) => (
+            <li className="shopping-row" key={product._id}>
+              <div className="shopping-image">
+                <ProductImage source={product.images[0]} alt="" />
+              </div>
+              <div className="shopping-item">
+                <Link className="shopping-title" to={`/products/${product._id}`}>{product.name}</Link>
+                <p className="text-sm text-stone-600">{formatPrice(product.price)}</p>
+                {product.stock === 0 && <p className="mt-1 text-sm text-brand-dark-red">Out of stock</p>}
+              </div>
+              <div className="shopping-row-actions">
+                <button type="button" className="button button-red" disabled={pending || product.stock === 0} onClick={() => removeProduct(product, true)}>
+                  <ShoppingBag size={16} aria-hidden="true" /> Move to cart
+                </button>
+                <button type="button" className="text-link disabled:text-stone-500" disabled={pending} onClick={() => removeProduct(product)}>
+                  <Trash2 size={16} aria-hidden="true" /> Remove
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}

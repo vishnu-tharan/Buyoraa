@@ -4,8 +4,10 @@ import { Loading, PageMessage } from './components/Feedback.jsx'
 import StoreLayout from './components/StoreLayout.jsx'
 import { Account, AuthForm } from './pages/Account.jsx'
 import Admin, { AdminLayout } from './pages/Admin.jsx'
+import Cart from './pages/Cart.jsx'
 import { Catalog, ProductDetails } from './pages/Catalog.jsx'
 import Home from './pages/Home.jsx'
+import Wishlist from './pages/Wishlist.jsx'
 
 function ProtectedRoute({ adminOnly = false }) {
   const { user, loading } = useAuth()
@@ -34,10 +36,12 @@ export default function App() {
         <Route index element={<Home />} />
         <Route path="products" element={<Catalog />} />
         <Route path="products/:id" element={<ProductDetails />} />
+        <Route path="cart" element={<Cart />} />
         <Route path="login" element={<AuthForm key="login" />} />
         <Route path="register" element={<AuthForm key="register" registerMode />} />
         <Route element={<ProtectedRoute />}>
           <Route path="account" element={<Account />} />
+          <Route path="wishlist" element={<Wishlist />} />
         </Route>
         <Route path="*" element={
           <PageMessage linkTo="/" linkLabel="Back to the store">Page not found.</PageMessage>

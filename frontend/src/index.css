@@ -99,9 +99,23 @@ body {
 
 .account-link {
   display: inline-flex;
-  justify-self: end;
   align-items: center;
   gap: 0.45rem;
+}
+
+.nav-actions {
+  display: flex;
+  justify-self: end;
+  align-items: center;
+  gap: clamp(0.45rem, 1.5vw, 1rem);
+}
+
+.nav-actions [aria-current="page"] { color: var(--color-brand-red); }
+
+.cart-count {
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--color-brand-cream);
 }
 
 .store-main {
@@ -317,18 +331,40 @@ body {
   letter-spacing: -0.045em;
 }
 
-.catalog-toolbar {
+.catalog-filters {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr) minmax(8rem, 1fr) repeat(2, minmax(7rem, 0.65fr)) minmax(9rem, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding: 1.1rem;
+  border: 1px solid var(--color-brand-line);
+  border-radius: 1rem;
+  background: white;
+}
+
+.catalog-filters label {
+  display: grid;
+  align-content: end;
+  gap: 0.35rem;
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.filter-actions,
+.catalog-filters .form-error { grid-column: 1 / -1; }
+
+.filter-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 1.25rem;
 }
 
-.catalog-toolbar label { font-weight: 700; }
-
-.catalog-toolbar select,
+.catalog-filters select,
+.catalog-filters input,
 .account-form input {
+  width: 100%;
   max-width: 100%;
   min-height: 2.75rem;
   padding: 0.65rem 0.75rem;
@@ -448,8 +484,69 @@ body {
 .admin-table thead { background: var(--color-brand-cream); }
 .admin-table tbody tr + tr { border-top: 1px solid var(--color-brand-line); }
 
+.cart-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.42fr);
+  align-items: start;
+  gap: 1.25rem;
+}
+
+.shopping-list { display: grid; gap: 0.75rem; }
+
+.shopping-row {
+  display: grid;
+  grid-template-columns: 5.2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.9rem;
+  border: 1px solid var(--color-brand-line);
+  border-radius: 0.85rem;
+  background: white;
+}
+
+.shopping-image .product-image { border-radius: 0.5rem; }
+.shopping-title { overflow-wrap: anywhere; font-weight: 750; }
+a.shopping-title:hover { color: var(--color-brand-red); text-decoration: underline; }
+.shopping-row-actions { display: grid; justify-items: end; gap: 0.5rem; }
+
+.quantity-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.5rem;
+}
+
+.quantity-controls button {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid var(--color-brand-line);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.quantity-controls button:hover { background: var(--color-brand-cream); }
+.quantity-controls button:disabled { opacity: 0.45; cursor: default; }
+
+.cart-summary {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.1rem;
+  border: 1px solid var(--color-brand-line);
+  border-radius: 0.85rem;
+  background: white;
+}
+
+.cart-summary h2 { font-size: 1.2rem; font-weight: 800; }
+.cart-summary dl { display: grid; gap: 0.45rem; }
+.cart-summary dl div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.35rem; }
+.cart-total { margin-top: 0.35rem; padding-top: 0.65rem; border-top: 1px solid var(--color-brand-line); font-weight: 750; }
+
 @media (max-width: 56rem) {
   .category-grid, .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .catalog-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filter-search { grid-column: 1 / -1; }
 }
 
 @media (max-width: 40rem) {
@@ -457,9 +554,11 @@ body {
   .store-nav { grid-template-columns: 1fr 1fr; padding-top: 0.55rem; }
   .nav-pages { grid-column: 1 / -1; grid-row: 2; }
   .store-main { padding-top: 1.15rem; }
-  .store-hero, .product-detail { grid-template-columns: 1fr; }
+  .store-hero, .product-detail, .cart-layout { grid-template-columns: 1fr; }
   .hero-copy h1 { font-size: clamp(2.1rem, 8.8vw, 2.65rem); }
   .hero-media { min-height: 13rem; }
   .category-grid, .product-grid { gap: 0.65rem; }
   .category-link, .product-card-info { padding: 0.75rem; }
+  .shopping-row { grid-template-columns: 4.25rem minmax(0, 1fr); }
+  .shopping-row-actions { grid-column: 2; justify-items: start; }
 }

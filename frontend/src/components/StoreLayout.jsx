@@ -1,7 +1,8 @@
-import { ShoppingBag, UserRound } from 'lucide-react'
+import { Heart, Search, ShoppingBag, UserRound } from 'lucide-react'
 import { useEffect } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router'
 import { useAuth } from '../AuthContext.jsx'
+import { useCart } from '../CartContext.jsx'
 
 export function BrandLink() {
   return (
@@ -14,6 +15,7 @@ export function BrandLink() {
 
 function Navbar() {
   const { user, loading } = useAuth()
+  const { count } = useCart()
   const navClass = ({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'
 
   return (
@@ -25,10 +27,22 @@ function Navbar() {
           <NavLink to="/products" className={navClass}>Shop</NavLink>
           <Link to="/#categories" className="nav-link">Categories</Link>
         </div>
-        <Link to={user ? '/account' : '/login'} className="account-link">
-          <UserRound size={17} aria-hidden="true" />
-          {loading || user ? 'Account' : 'Sign in'}
-        </Link>
+        <div className="nav-actions">
+          <Link to="/products#search" className="account-link" aria-label="Search products" title="Search products">
+            <Search size={18} aria-hidden="true" />
+          </Link>
+          <NavLink to="/wishlist" className="account-link" aria-label="Wishlist" title="Wishlist">
+            <Heart size={18} aria-hidden="true" />
+          </NavLink>
+          <NavLink to="/cart" className="account-link" aria-label={`Cart, ${count} ${count === 1 ? 'item' : 'items'}`} title="Cart">
+            <ShoppingBag size={18} aria-hidden="true" />
+            <span className="cart-count">{count}</span>
+          </NavLink>
+          <Link to={user ? '/account' : '/login'} className="account-link">
+            <UserRound size={17} aria-hidden="true" />
+            <span className="sr-only min-[360px]:not-sr-only">{loading || user ? 'Account' : 'Sign in'}</span>
+          </Link>
+        </div>
       </nav>
     </header>
   )
@@ -57,6 +71,8 @@ export default function StoreLayout() {
   useEffect(() => {
     if (location.hash === '#categories') {
       document.getElementById('categories')?.scrollIntoView()
+    } else if (location.hash === '#search') {
+      document.getElementById('search')?.focus()
     } else {
       window.scrollTo(0, 0)
     }

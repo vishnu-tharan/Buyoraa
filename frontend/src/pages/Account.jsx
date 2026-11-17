@@ -11,8 +11,9 @@ export function AuthForm({ registerMode = false }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const from = state?.from
-  const returningToAdmin = typeof from === 'string' && (from === '/admin' || from.startsWith('/admin?'))
-  const destination = returningToAdmin ? from : '/account'
+  const allowedReturn = typeof from === 'string'
+    && /^\/(?:admin(?:\?.*)?|wishlist|products\/[a-f0-9]{24})$/i.test(from)
+  const destination = allowedReturn ? from : '/account'
   const title = registerMode ? 'Create your account' : 'Sign in'
 
   if (loading) return <Loading label="Checking your account…" />

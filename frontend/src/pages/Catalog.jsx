@@ -1,7 +1,9 @@
-import { ChevronLeft, ChevronRight, PackageCheck, PackageX } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Heart, PackageCheck, PackageX, Search, ShoppingBag } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
-import { errorMessage, useApi } from '../api.js'
+import { api, errorMessage, useApi } from '../api.js'
+import { useAuth } from '../AuthContext.jsx'
+import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage } from '../components/Feedback.jsx'
 import ProductGrid, { formatPrice, ProductImage } from '../components/ProductGrid.jsx'
 
@@ -11,30 +13,83 @@ function pageLink(params, page) {
   return `/products?${nextParams}`
 }
 
+function CatalogFilters({ params, setParams, categories }) {
+  const [error, setError] = useState('')
+  const category = params.get('category') || ''
+  const categoryList = categories.data?.categories ?? []
+
+  function applyFilters(event) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const minimum = form.get('minPrice')
+    const maximum = form.get('maxPrice')
+
+    if (minimum && maximum && Number(minimum) > Number(maximum)) {
+      setError('The minimum price must be no higher than the maximum price.')
+      return
+    }
+
+    const nextParams = new URLSearchParams()
+    if (params.get('featured') === 'true') nextParams.set('featured', 'true')
+    for (const [name, value] of form) {
+      if (value.trim() && !(name === 'sort' && value === 'newest')) nextParams.set(name, value.trim())
+    }
+
+    setError('')
+    setParams(nextParams)
+  }
+
+  return (
+    <form className="catalog-filters" onSubmit={applyFilters}>
+      <label className="filter-search">
+        Search by product name
+        <input id="search" type="search" name="q" maxLength={100} defaultValue={params.get('q') || ''} placeholder="Search products" />
+      </label>
+      <label>
+        Category
+        <select name="category" defaultValue={category}>
+          <option value="">All categories</option>
+          {category && !categoryList.some(({ slug }) => slug === category) && (
+            <option value={category}>{category}</option>
+          )}
+          {categoryList.map(({ _id, name, slug }) => <option key={_id} value={slug}>{name}</option>)}
+        </select>
+      </label>
+      <label>
+        Min price (LKR)
+        <input name="minPrice" inputMode="decimal" pattern="[0-9]{1,14}(\.[0-9]{1,2})?" defaultValue={params.get('minPrice') || ''} placeholder="0.00" />
+      </label>
+      <label>
+        Max price (LKR)
+        <input name="maxPrice" inputMode="decimal" pattern="[0-9]{1,14}(\.[0-9]{1,2})?" defaultValue={params.get('maxPrice') || ''} placeholder="Any" />
+      </label>
+      <label>
+        Sort by
+        <select name="sort" defaultValue={params.get('sort') || 'newest'}>
+          <option value="newest">Newest</option>
+          <option value="price-asc">Price, low to high</option>
+          <option value="price-desc">Price, high to low</option>
+        </select>
+      </label>
+      <div className="filter-actions">
+        <button className="button button-red" type="submit"><Search size={17} aria-hidden="true" /> Apply filters</button>
+        {params.size > 0 && <Link to="/products" className="text-link">Clear filters</Link>}
+        {categories.error && <button type="button" className="text-link" onClick={categories.retry}>Reload categories</button>}
+      </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+    </form>
+  )
+}
+
 export function Catalog() {
   const [params, setParams] = useSearchParams()
-  const category = params.get('category') || ''
   const featured = params.get('featured') === 'true'
   const productQuery = params.size ? `?${params}` : ''
   const products = useApi(`/products${productQuery}`)
   const categories = useApi('/categories')
 
-  function changeCategory(event) {
-    const nextParams = new URLSearchParams(params)
-    nextParams.delete('page')
-
-    if (event.target.value) {
-      nextParams.set('category', event.target.value)
-    } else {
-      nextParams.delete('category')
-    }
-
-    setParams(nextParams)
-  }
-
   const { data, error, loading, retry } = products
   const pageCount = data ? Math.min(1000, Math.ceil(data.total / data.pageSize)) : 0
-  const categoryList = categories.data?.categories ?? []
 
   return (
     <section>
@@ -43,20 +98,7 @@ export function Catalog() {
         {data && <p>{data.total} {data.total === 1 ? 'product' : 'products'}</p>}
       </div>
 
-      <div className="catalog-toolbar">
-        <label htmlFor="category">Category</label>
-        <select id="category" value={category} onChange={changeCategory} disabled={categories.loading}>
-          <option value="">All categories</option>
-          {category && !categoryList.some(({ slug }) => slug === category) && (
-            <option value={category}>{category}</option>
-          )}
-          {categoryList.map(({ _id, name, slug }) => <option key={_id} value={slug}>{name}</option>)}
-        </select>
-        {(category || featured) && <Link to="/products" className="text-link">Clear filters</Link>}
-        {categories.error && (
-          <button type="button" className="text-link" onClick={categories.retry}>Reload categories</button>
-        )}
-      </div>
+      <CatalogFilters key={params.toString()} params={params} setParams={setParams} categories={categories} />
 
       {loading && <Loading label="Loading products…" />}
       {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load the products.')}</PageMessage>}
@@ -153,8 +195,61 @@ function ProductInformation({ product }) {
             {available ? 'In stock' : 'Out of stock'}
           </p>
           <p className="product-description">{product.description}</p>
+          <ProductActions product={product} />
         </div>
       </div>
     </article>
+  )
+}
+
+function ProductActions({ product }) {
+  const { user, loading } = useAuth()
+  const { addItem } = useCart()
+  const [notice, setNotice] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  function addToCart() {
+    const message = addItem(product)
+    setNotice(message ? { message, error: true } : { message: 'Added to your cart.' })
+  }
+
+  async function saveProduct() {
+    setSaving(true)
+    setNotice(null)
+    try {
+      await api.put(`/wishlist/${product._id}`)
+      setSaved(true)
+      setNotice({ message: 'Saved to your wishlist.' })
+    } catch (error) {
+      setNotice({ error: true, message: errorMessage(error, 'We couldn’t save this product. Try again.') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-5">
+      <div className="flex flex-wrap gap-3">
+        <button type="button" className="button button-red" disabled={product.stock === 0} onClick={addToCart}>
+          <ShoppingBag size={17} aria-hidden="true" /> Add to cart
+        </button>
+        {!loading && user && (
+          <button type="button" className="button button-outline" disabled={saving || saved} onClick={saveProduct}>
+            <Heart size={17} aria-hidden="true" /> {saved ? 'Saved to wishlist' : 'Save to wishlist'}
+          </button>
+        )}
+        {!loading && !user && (
+          <Link to="/login" state={{ from: `/products/${product._id}` }} className="button button-outline">
+            <Heart size={17} aria-hidden="true" /> Sign in to save
+          </Link>
+        )}
+      </div>
+      {notice && (
+        <p className={notice.error ? 'form-error mt-3' : 'mt-3 text-sm'} role={notice.error ? 'alert' : 'status'}>
+          {notice.message}
+        </p>
+      )}
+    </div>
   )
 }

@@ -3,10 +3,12 @@ import cookieParser from 'cookie-parser'
 import express from 'express'
 import mongoose from 'mongoose'
 import { connectDatabase } from './config/database.js'
+import { quoteCart } from './controllers/cartController.js'
 import { handleError } from './middleware/errors.js'
 import adminRoutes from './routes/adminRoutes.js'
 import authRoutes from './routes/authRoutes.js'
 import catalogRoutes from './routes/catalogRoutes.js'
+import wishlistRoutes from './routes/wishlistRoutes.js'
 
 const app = express()
 const host = '127.0.0.1'
@@ -42,6 +44,8 @@ app.get('/api/health', async (request, response) => {
 
 app.use('/api/auth', authRoutes)
 app.use('/api/admin', adminRoutes)
+app.post('/api/cart/quote', quoteCart)
+app.use('/api/wishlist', wishlistRoutes)
 app.use('/api', catalogRoutes)
 
 app.use((request, response) => {

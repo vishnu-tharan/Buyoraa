@@ -4,7 +4,7 @@
 
 ## Phase 1 — Project setup
 
-Buyora is a JavaScript MERN project. Phase 1 set up the local development environment. Phase 2 added the database models and authentication APIs. Phase 3 connects the red and yellow storefront to those APIs.
+Buyora is a JavaScript MERN project. The red and yellow storefront supports product browsing, account sign-in, a shopping cart, and a wishlist.
 
 The original Phase 1 layout
 
@@ -227,4 +227,55 @@ Run these commands from the project root.
 git add -- frontend backend/controllers/catalogController.js README.md
 git diff --cached --stat
 git commit -m "Build storefront foundation"
+```
+
+## Phase 4 — Shopping features
+
+```text
+backend/
+├── controllers/
+│   ├── catalogController.js
+│   └── cartController.js
+└── routes/
+    └── wishlistRoutes.js
+frontend/src/
+├── CartContext.jsx
+└── pages/
+    ├── Catalog.jsx
+    ├── Cart.jsx
+    └── Wishlist.jsx
+```
+
+The catalog form keeps search, category, price range, and sort in the URL. Express applies the filters before paginating. The cart stores product IDs and quantities in the current browser. When you open the cart or change a quantity, Express reads current stock and prices from MongoDB. Delivery is a flat LKR 350 for a cart with available items. The summary excludes unavailable lines and identifies which quantities need to change.
+
+The wishlist belongs to the signed-in account and lives in MongoDB. Moving a saved product to the cart keeps any quantity already there. Cart estimates leave inventory untouched. Order placement comes in Phase 5.
+
+### Run and verify
+
+Start MongoDB, the backend, and the frontend using **Run locally on Windows**. Open [Buyora](http://127.0.0.1:5173). Phase 4 uses the existing packages and environment settings.
+
+1. Open **Shop**, enter a product name, select a category, and apply a price range and sort. Price fields take rupees, such as `4500.50`.
+2. Open an in-stock product and add it to the cart. Change its quantity, verify the subtotal and delivery, and reload to confirm the quantity survives.
+3. Sign in, save a product, and open **Wishlist**. Reload it, then remove the item or move it to the cart.
+
+A fresh catalog shows empty states. To try a single product before catalog seeding is added, insert a category in MongoDB Compass with a name and slug. Insert a product with `name`, `description`, `price` in cents, `stock`, `images` as an array of HTTPS URLs, and `category` as the category's ObjectId.
+
+### Phase 4 API routes
+
+| Method and path | What it does |
+| --- | --- |
+| `GET /api/products?q=phone&minPrice=1000&maxPrice=9000&sort=price-asc` | Searches by name and applies price limits and sorting. Supports existing category, featured, and page parameters. |
+| `POST /api/cart/quote` | Takes `items`, an array of objects with `productId` and `quantity`, and returns current stock and estimated totals. |
+| `GET /api/wishlist` | Returns the signed-in account's saved products. |
+| `PUT /api/wishlist/:productId` | Saves the product once, even when the request is repeated. |
+| `DELETE /api/wishlist/:productId` | Removes the product from the signed-in account's wishlist. |
+
+### Commit Phase 4
+
+Run these commands from the project root.
+
+```powershell
+git add -- backend frontend README.md
+git diff --cached --stat
+git commit -m "Add shopping features"
 ```

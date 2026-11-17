@@ -12,28 +12,35 @@ export function errorMessage(error, fallback) {
   return typeof message === 'string' ? message : fallback
 }
 
-export function useApi(path) {
+export function useApi(path, jsonBody) {
   const [result, setResult] = useState(null)
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     const controller = new AbortController()
+    const options = { signal: controller.signal }
+    const request = jsonBody === undefined
+      ? api.get(path, options)
+      : api.post(path, JSON.parse(jsonBody), options)
 
-    api.get(path, { signal: controller.signal })
+    request
       .then(({ data }) => {
-        if (!controller.signal.aborted) setResult({ path, attempt, data })
+        if (!controller.signal.aborted) setResult({ path, jsonBody, attempt, data })
       })
       .catch((error) => {
-        if (!controller.signal.aborted) setResult({ path, attempt, error })
+        if (!controller.signal.aborted) setResult({ path, jsonBody, attempt, error })
       })
 
     return () => controller.abort()
-  }, [path, attempt])
+  }, [path, jsonBody, attempt])
 
-  const currentResult = result?.path === path && result.attempt === attempt ? result : null
+  const currentResult = result?.path === path && result.jsonBody === jsonBody && result.attempt === attempt
+    ? result
+    : null
 
   return {
     data: currentResult?.data,
+    previousData: result?.path === path ? result.data : undefined,
     error: currentResult?.error,
     loading: !currentResult,
     retry: () => setAttempt((previousAttempt) => previousAttempt + 1),
