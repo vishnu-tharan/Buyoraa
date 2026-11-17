@@ -34,6 +34,8 @@ const orderSchema = new mongoose.Schema(
     subtotal: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
     shippingFee: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
     totalAmount: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
+    checkoutKey: { type: String, immutable: true, select: false },
+    checkoutFingerprint: { type: String, immutable: true, select: false },
     paymentMethod: { type: String, enum: ['cash_on_delivery'], default: 'cash_on_delivery' },
     paymentStatus: { type: String, enum: ['pending', 'paid'], default: 'pending' },
     orderStatus: {
@@ -46,5 +48,9 @@ const orderSchema = new mongoose.Schema(
 )
 
 orderSchema.index({ user: 1, createdAt: -1, _id: -1 })
+orderSchema.index(
+  { user: 1, checkoutKey: 1 },
+  { unique: true, partialFilterExpression: { checkoutKey: { $type: 'string' } } },
+)
 
 export default mongoose.model('Order', orderSchema)

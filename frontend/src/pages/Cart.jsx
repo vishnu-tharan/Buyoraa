@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { errorMessage, useApi } from '../api.js'
 import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage } from '../components/Feedback.jsx'
+import OrderSummary from '../components/OrderSummary.jsx'
 import { formatPrice, ProductImage } from '../components/ProductGrid.jsx'
 
 function CartItem({ line }) {
@@ -55,22 +56,15 @@ function CartItem({ line }) {
 
 function CartSummary({ quote, loading }) {
   return (
-    <aside className="cart-summary">
-      <h2>Order summary</h2>
-      {loading ? <p role="status">Checking prices and stock…</p> : (
-        <dl>
-          <div><dt>Subtotal</dt><dd>{formatPrice(quote.subtotal)}</dd></div>
-          <div><dt>Delivery</dt><dd>{formatPrice(quote.shippingFee)}</dd></div>
-          <div className="cart-total"><dt>Estimated total</dt><dd>{formatPrice(quote.totalAmount)}</dd></div>
-        </dl>
-      )}
+    <OrderSummary amounts={quote} loading={loading} estimated>
       {!loading && !quote.canCheckout && (
         <p className="text-sm text-brand-dark-red">
           The total includes available items only. Remove unavailable items or lower their quantities.
         </p>
       )}
+      {!loading && quote.canCheckout && <Link to="/checkout" className="button button-red">Continue to checkout</Link>}
       <Link to="/products" className="button button-outline">Continue shopping</Link>
-    </aside>
+    </OrderSummary>
   )
 }
 

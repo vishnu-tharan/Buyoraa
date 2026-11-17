@@ -40,8 +40,12 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  function updateAccount(userId, changes) {
+    setUser((current) => current?.id === userId ? { ...current, ...changes } : current)
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, register, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, register, signOut, updateAccount }}>
       {children}
     </AuthContext.Provider>
   )

@@ -17,7 +17,7 @@ function validPassword(password) {
   return typeof password === 'string' && password.length >= 8 && !bcrypt.truncates(password)
 }
 
-function accountDetails(user) {
+export function accountDetails(user) {
   return {
     id: user.id,
     name: user.name,

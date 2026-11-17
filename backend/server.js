@@ -8,6 +8,8 @@ import { handleError } from './middleware/errors.js'
 import adminRoutes from './routes/adminRoutes.js'
 import authRoutes from './routes/authRoutes.js'
 import catalogRoutes from './routes/catalogRoutes.js'
+import orderRoutes from './routes/orderRoutes.js'
+import userRoutes from './routes/userRoutes.js'
 import wishlistRoutes from './routes/wishlistRoutes.js'
 
 const app = express()
@@ -45,6 +47,8 @@ app.get('/api/health', async (request, response) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/admin', adminRoutes)
 app.post('/api/cart/quote', quoteCart)
+app.use('/api/orders', orderRoutes)
+app.use('/api/users', userRoutes)
 app.use('/api/wishlist', wishlistRoutes)
 app.use('/api', catalogRoutes)
 

@@ -1,7 +1,15 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 
 const CartContext = createContext(null)
 const storageKey = 'buyora-cart'
+
+function saveCart(items) {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(items))
+  } catch {
+    // The cart still works for this visit when storage is unavailable.
+  }
+}
 
 function readCart() {
   try {
@@ -25,13 +33,11 @@ function readCart() {
 
 export function CartProvider({ children }) {
   const [items, setItems] = useState(readCart)
+  const latestItems = useRef(items)
 
   useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(items))
-    } catch {
-      // The cart still works for this visit when storage is unavailable.
-    }
+    latestItems.current = items
+    saveCart(items)
   }, [items])
 
   function addItem(product, { onlyIfMissing = false } = {}) {
@@ -65,10 +71,21 @@ export function CartProvider({ children }) {
     setItems((previous) => previous.filter((item) => item.productId !== productId))
   }
 
+  function removeOrderedItems(orderedItems) {
+    const ordered = new Map(orderedItems.map(({ productId, quantity }) => [productId, quantity]))
+    const remaining = latestItems.current
+      .map((item) => ({ ...item, quantity: item.quantity - (ordered.get(item.productId) ?? 0) }))
+      .filter(({ quantity }) => quantity > 0)
+
+    latestItems.current = remaining
+    saveCart(remaining)
+    setItems(remaining)
+  }
+
   const count = items.reduce((total, item) => total + item.quantity, 0)
 
   return (
-    <CartContext.Provider value={{ items, count, addItem, setQuantity, removeItem }}>
+    <CartContext.Provider value={{ items, count, addItem, setQuantity, removeItem, removeOrderedItems }}>
       {children}
     </CartContext.Provider>
   )

@@ -1,8 +1,9 @@
 import { LogOut, ShieldCheck, UserRound } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router'
-import { errorMessage } from '../api.js'
+import { api, errorMessage } from '../api.js'
 import { useAuth } from '../AuthContext.jsx'
+import AddressFields, { collectAddress } from '../components/AddressFields.jsx'
 import { Loading } from '../components/Feedback.jsx'
 
 export function AuthForm({ registerMode = false }) {
@@ -12,7 +13,7 @@ export function AuthForm({ registerMode = false }) {
   const [error, setError] = useState('')
   const from = state?.from
   const allowedReturn = typeof from === 'string'
-    && /^\/(?:admin(?:\?.*)?|wishlist|products\/[a-f0-9]{24})$/i.test(from)
+    && /^\/(?:admin(?:\?.*)?|wishlist|checkout|orders(?:\/[a-f0-9]{24}(?:\/success)?|\?page=\d+)?|products\/[a-f0-9]{24})$/i.test(from)
   const destination = allowedReturn ? from : '/account'
   const title = registerMode ? 'Create your account' : 'Sign in'
 
@@ -110,7 +111,7 @@ export function Account() {
   }
 
   return (
-    <section className="account-panel">
+    <section className="account-panel account-settings">
       <h1>My account</h1>
       <div className="account-profile">
         <span className="brand-icon"><UserRound size={19} aria-hidden="true" /></span>
@@ -121,6 +122,7 @@ export function Account() {
       </div>
       {error && <p className="form-error mb-4" role="alert">{error}</p>}
       <div className="flex flex-wrap gap-3">
+        <Link to="/orders" className="button button-red">My orders</Link>
         {user.role === 'admin' && (
           <Link to="/admin" className="button button-red">
             <ShieldCheck size={18} aria-hidden="true" /> Admin area
@@ -130,6 +132,131 @@ export function Account() {
           <LogOut size={17} aria-hidden="true" /> {submitting ? 'Signing out…' : 'Sign out'}
         </button>
       </div>
+      <ProfileSettings user={user} />
+      <SavedAddresses user={user} />
     </section>
+  )
+}
+
+function ProfileSettings({ user }) {
+  const { updateAccount } = useAuth()
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState(null)
+
+  async function saveProfile(event) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    setSaving(true)
+    setNotice(null)
+
+    try {
+      const { data } = await api.patch('/users/profile', { name: form.get('name'), phone: form.get('phone') })
+      updateAccount(data.user.id, { name: data.user.name, phone: data.user.phone })
+      setNotice({ message: 'Profile updated.' })
+    } catch (requestError) {
+      setNotice({ error: true, message: errorMessage(requestError, 'We couldn’t update your profile.') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="account-section">
+      <h2>Profile details</h2>
+      <form className="account-form" onSubmit={saveProfile}>
+        <label>
+          Full name
+          <input name="name" maxLength={100} defaultValue={user.name} autoComplete="name" required />
+        </label>
+        <label>
+          Phone number
+          <input name="phone" type="tel" maxLength={30} defaultValue={user.phone} autoComplete="tel" />
+        </label>
+        <button className="button button-outline" type="submit" disabled={saving}>
+          {saving ? 'Saving…' : 'Save profile'}
+        </button>
+      </form>
+      <AccountNotice notice={notice} />
+    </section>
+  )
+}
+
+function SavedAddresses({ user }) {
+  const { updateAccount } = useAuth()
+  const addresses = user.addresses ?? []
+  const [editing, setEditing] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState(null)
+  const selectedAddress = addresses.find(({ _id }) => _id === editing)
+
+  async function updateAddress(method, path, address, message) {
+    setSaving(true)
+    setNotice(null)
+
+    try {
+      const { data } = await api.request({ method, url: path, data: address })
+      updateAccount(data.user.id, { addresses: data.user.addresses })
+      setEditing(null)
+      setNotice({ message })
+    } catch (requestError) {
+      setNotice({ error: true, message: errorMessage(requestError, 'We couldn’t update your addresses.') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function saveAddress(event) {
+    event.preventDefault()
+    const address = collectAddress(new FormData(event.currentTarget))
+    if (editing === 'new') {
+      updateAddress('post', '/users/addresses', address, 'Address saved.')
+    } else {
+      updateAddress('patch', `/users/addresses/${editing}`, address, 'Address updated.')
+    }
+  }
+
+  return (
+    <section className="account-section">
+      <h2>Saved delivery addresses</h2>
+      {addresses.length === 0 && <p className="mt-2 text-sm text-stone-600">No delivery addresses saved yet.</p>}
+      <ul className="address-list">
+        {addresses.map((address) => (
+          <li key={address._id}>
+            <div className="min-w-0">
+              <p className="break-words font-semibold">{address.street}</p>
+              <p className="break-words text-sm text-stone-600">{address.city}, {address.postalCode}, {address.country}</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button className="text-link" type="button" disabled={saving} onClick={() => setEditing(address._id)}>Edit</button>
+              <button className="text-link" type="button" disabled={saving} onClick={() => updateAddress('delete', `/users/addresses/${address._id}`, undefined, 'Address removed.')}>Remove</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {editing ? (
+        <form className="account-form" key={editing} onSubmit={saveAddress} aria-label={editing === 'new' ? 'Add address' : 'Edit address'}>
+          <AddressFields address={selectedAddress ?? { country: 'Sri Lanka' }} />
+          <div className="flex flex-wrap gap-3">
+            <button className="button button-red" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save address'}</button>
+            <button className="button button-outline" type="button" disabled={saving} onClick={() => setEditing(null)}>Cancel</button>
+          </div>
+        </form>
+      ) : (
+        <button className="button button-outline mt-3" type="button" disabled={saving || addresses.length >= 10} onClick={() => setEditing('new')}>
+          Add address
+        </button>
+      )}
+      <AccountNotice notice={notice} />
+    </section>
+  )
+}
+
+function AccountNotice({ notice }) {
+  if (!notice) return null
+
+  return (
+    <p className={notice.error ? 'form-error mt-3' : 'mt-3 text-sm'} role={notice.error ? 'alert' : 'status'}>
+      {notice.message}
+    </p>
   )
 }

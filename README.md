@@ -4,7 +4,7 @@
 
 ## Phase 1 — Project setup
 
-Buyora is a JavaScript MERN project. The red and yellow storefront supports product browsing, account sign-in, a shopping cart, and a wishlist.
+Buyora is a JavaScript MERN project. The red and yellow storefront supports product browsing, accounts, a shopping cart, a wishlist, and Cash on Delivery orders.
 
 The original Phase 1 layout
 
@@ -248,7 +248,7 @@ frontend/src/
 
 The catalog form keeps search, category, price range, and sort in the URL. Express applies the filters before paginating. The cart stores product IDs and quantities in the current browser. When you open the cart or change a quantity, Express reads current stock and prices from MongoDB. Delivery is a flat LKR 350 for a cart with available items. The summary excludes unavailable lines and identifies which quantities need to change.
 
-The wishlist belongs to the signed-in account and lives in MongoDB. Moving a saved product to the cart keeps any quantity already there. Cart estimates leave inventory untouched. Order placement comes in Phase 5.
+The wishlist belongs to the signed-in account and lives in MongoDB. Moving a saved product to the cart keeps any quantity already there. Cart estimates leave inventory untouched.
 
 ### Run and verify
 
@@ -278,4 +278,68 @@ Run these commands from the project root.
 git add -- backend frontend README.md
 git diff --cached --stat
 git commit -m "Add shopping features"
+```
+
+## Phase 5 — Checkout and orders
+
+```text
+backend/
+├── controllers/orderController.js
+├── routes/orderRoutes.js
+├── routes/userRoutes.js
+└── utils/address.js
+frontend/src/
+├── components/AddressFields.jsx
+├── components/OrderSummary.jsx
+├── pages/Checkout.jsx
+└── pages/Orders.jsx
+```
+
+To place an order, sign in, open the cart, and select **Continue to checkout**. Enter a delivery address or choose one saved in **My account**. Confirm the items and amount, then select **Place order**. **My orders** shows the order status, delivery address, payment status, and original item prices. Cash on Delivery starts with payment pending.
+
+Express recalculates the total from MongoDB and asks the shopper to review any price change. It saves the order and reduces stock in one transaction. Retrying the same checkout returns the original order. The browser remembers the checkout attempt in the current tab until it receives a receipt.
+
+### Run checkout locally
+
+Order placement uses a MongoDB replica set so a failed order cannot leave a partial stock deduction. A transaction-capable Atlas cluster also works with its usual connection string. Browsing, account settings, and cart quotes also work with a standalone MongoDB server. [MongoDB development replica sets](https://www.mongodb.com/docs/manual/tutorial/deploy-replica-set-for-testing/)
+
+For local Windows development, run a second MongoDB instance with its own data folder. This keeps existing data on port 27017 separate. Adjust the `mongod.exe` path if yours uses a different version.
+
+```powershell
+$buyoraReplicaPath = Join-Path $env:LOCALAPPDATA 'Buyora\mongodb'
+New-Item -ItemType Directory -Path $buyoraReplicaPath -Force | Out-Null
+& 'C:\Program Files\MongoDB\Server\8.0\bin\mongod.exe' --dbpath $buyoraReplicaPath --port 27018 --bind_ip 127.0.0.1 --replSet buyora-rs
+```
+
+Keep that terminal open. Open another terminal at the project root, install the backend packages if needed, and initialize the replica set once.
+
+```powershell
+cd backend
+npm.cmd ci
+node --input-type=module -e "import mongoose from 'mongoose'; const client = new mongoose.mongo.MongoClient('mongodb://127.0.0.1:27018/?directConnection=true'); try { await client.db('admin').command({ replSetInitiate: { _id: 'buyora-rs', members: [{ _id: 0, host: 'localhost:27018' }] } }); } finally { await client.close(); }"
+```
+
+After the replica set elects its primary, set `MONGODB_URI` in `backend/.env` to the connection string below and keep your existing `JWT_SECRET`. Run `npm.cmd run dev` from `backend`, then start the frontend as before.
+
+```dotenv
+MONGODB_URI=mongodb://127.0.0.1:27018/buyora?replicaSet=buyora-rs
+```
+
+This local replica starts with its own empty catalog. Create a test product using the Phase 4 instructions in the replica's database before trying checkout.
+
+### Verify Phase 5
+
+1. Register or sign in. In **My account**, update your phone number and add a delivery address. Edit or remove an address there.
+2. Add an in-stock product and place a Cash on Delivery order using the saved address. Confirm that the cart clears, stock decreases, and the order is in **My orders**.
+3. In Postman, use a signed-in cookie to test `GET /api/orders` and `GET /api/orders/:id`. For `POST /api/orders`, send `items` with a `productId` and `quantity` per line. Include `shippingAddress` with `name`, `phone`, `street`, `city`, `postalCode`, and `country`. Take `expectedTotal` in cents from `POST /api/cart/quote` and generate `checkoutKey` as a UUID. Submitting the same body twice returns 201 and then 200 with the same order ID.
+4. If the order says it needs a replica set, check the backend's `MONGODB_URI` and restart the backend after updating it.
+
+### Commit Phase 5
+
+When earlier changes are already committed, run these commands from the project root.
+
+```powershell
+git add -- backend frontend README.md
+git diff --cached --stat
+git commit -m "Add checkout and orders"
 ```

@@ -6,7 +6,9 @@ import { Account, AuthForm } from './pages/Account.jsx'
 import Admin, { AdminLayout } from './pages/Admin.jsx'
 import Cart from './pages/Cart.jsx'
 import { Catalog, ProductDetails } from './pages/Catalog.jsx'
+import Checkout from './pages/Checkout.jsx'
 import Home from './pages/Home.jsx'
+import { OrderDetails, OrderSuccess, Orders } from './pages/Orders.jsx'
 import Wishlist from './pages/Wishlist.jsx'
 
 function ProtectedRoute({ adminOnly = false }) {
@@ -42,6 +44,10 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="account" element={<Account />} />
           <Route path="wishlist" element={<Wishlist />} />
+          <Route path="checkout" element={<Checkout />} />
+          <Route path="orders" element={<Orders />} />
+          <Route path="orders/:id" element={<OrderDetails />} />
+          <Route path="orders/:id/success" element={<OrderSuccess />} />
         </Route>
         <Route path="*" element={
           <PageMessage linkTo="/" linkLabel="Back to the store">Page not found.</PageMessage>
