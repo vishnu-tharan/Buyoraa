@@ -1,6 +1,7 @@
 import { CircleCheck } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
-import { errorMessage, useApi } from '../api.js'
+import { api, errorMessage, useApi } from '../api.js'
 import { Loading, PageMessage } from '../components/Feedback.jsx'
 import OrderSummary from '../components/OrderSummary.jsx'
 import { formatPrice } from '../components/ProductGrid.jsx'
@@ -51,9 +52,53 @@ export function Orders() {
   )
 }
 
+function OrderCancellation({ orderId, onResult }) {
+  const [confirming, setConfirming] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+
+  async function cancelOrder() {
+    setCancelling(true)
+    try {
+      await api.patch(`/orders/${encodeURIComponent(orderId)}/cancel`)
+      onResult({ message: 'Your order was cancelled.' })
+    } catch (error) {
+      onResult({
+        message: errorMessage(error, 'We couldn’t confirm the cancellation. Check your order status and try again.'),
+        error: true,
+      })
+    } finally {
+      setCancelling(false)
+      setConfirming(false)
+    }
+  }
+
+  if (!confirming) {
+    return (
+      <button type="button" className="button button-outline text-brand-dark-red" onClick={() => setConfirming(true)}>
+        Cancel order
+      </button>
+    )
+  }
+
+  return (
+    <div>
+      <p className="mb-3">Are you sure you want to cancel this order?</p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="button button-red" onClick={cancelOrder} disabled={cancelling}>
+          {cancelling ? 'Cancelling…' : 'Yes, cancel order'}
+        </button>
+        <button type="button" className="button button-outline" onClick={() => setConfirming(false)} disabled={cancelling}>
+          Keep order
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function OrderPage({ confirmation = false }) {
   const { id } = useParams()
   const { data, loading, error, retry } = useApi(`/orders/${encodeURIComponent(id)}`)
+  const [cancellation, setCancellation] = useState(null)
 
   if (loading) return <Loading label="Loading your order…" />
   if (error) {
@@ -66,16 +111,25 @@ function OrderPage({ confirmation = false }) {
   }
 
   const { order } = data
-  const orderNumber = order._id.slice(-8).toUpperCase()
+  const orderNumber = `#${order._id.slice(-8).toUpperCase()}`
   const address = order.shippingAddress
+  const cancelled = order.orderStatus === 'cancelled'
+  const canCancel = order.orderStatus === 'pending' && order.paymentStatus === 'pending'
+  const cancellationNotice = cancellation?.id === id ? cancellation : null
+  const cancellationError = cancellationNotice?.error && !cancelled
+
+  function showCancellationResult({ message, error }) {
+    setCancellation({ id, message, error })
+    retry()
+  }
 
   if (confirmation) {
     return (
       <section className="page-message order-confirmation">
         <CircleCheck size={44} className="mx-auto mb-3 text-brand-red" aria-hidden="true" />
-        <h1>Order placed</h1>
-        <p>Order #{orderNumber} · {formatPrice(order.totalAmount)}</p>
-        <p>Payment is due on delivery.</p>
+        <h1>{cancelled ? 'Order cancelled' : 'Order placed'}</h1>
+        <p>Order {orderNumber} · {formatPrice(order.totalAmount)}</p>
+        {order.paymentStatus === 'pending' && <p>{cancelled ? 'No payment is due.' : 'Payment is due on delivery.'}</p>}
         <div className="mt-4 flex flex-wrap justify-center gap-3">
           <Link className="button button-red" to={`/orders/${order._id}`}>View order details</Link>
           <Link className="button button-outline" to="/products">Continue shopping</Link>
@@ -88,13 +142,19 @@ function OrderPage({ confirmation = false }) {
     <section>
       <Link to="/orders" className="text-link mb-4">Back to my orders</Link>
       <div className="page-heading">
-        <h1>Order #{orderNumber}</h1>
+        <h1>Order {orderNumber}</h1>
         <p>{orderDate.format(new Date(order.createdAt))}</p>
       </div>
       <div className="cart-layout">
         <div className="checkout-panel">
           <h2>Order status</h2>
           <span className="stock-status capitalize my-0 w-fit">{order.orderStatus}</span>
+          {cancellationNotice && (
+            <p className={cancellationError ? 'form-error' : 'text-sm'} role={cancellationError ? 'alert' : 'status'}>
+              {cancelled ? 'Your order was cancelled.' : cancellationNotice.message}
+            </p>
+          )}
+          {canCancel && <OrderCancellation key={order._id} orderId={id} onResult={showCancellationResult} />}
           <h2>Items</h2>
           <ul className="order-lines">
             {order.orderItems.map((item, index) => (
@@ -114,7 +174,7 @@ function OrderPage({ confirmation = false }) {
           </address>
         </div>
         <OrderSummary amounts={order}>
-          <p>Cash on Delivery · Payment {order.paymentStatus}</p>
+          <p>Cash on Delivery · {cancelled && order.paymentStatus === 'pending' ? 'No payment due' : `Payment ${order.paymentStatus}`}</p>
         </OrderSummary>
       </div>
     </section>

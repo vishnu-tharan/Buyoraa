@@ -7,6 +7,55 @@ import { calculateCart, validateCartItems } from './cartController.js'
 
 const checkoutKeyPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/
 const stockChanged = new Error('Stock changed during checkout.')
+const restockFailed = new Error('Could not restore order stock.')
+
+export const nextStatuses = {
+  pending: ['confirmed', 'cancelled'],
+  confirmed: ['shipped', 'cancelled'],
+  shipped: ['delivered'],
+  delivered: [],
+  cancelled: [],
+}
+
+export async function changeOrderStatus({ orderId, status, customerId }) {
+  const filter = { _id: orderId }
+  if (customerId) filter.user = customerId
+
+  try {
+    return await mongoose.connection.transaction(async (session) => {
+      const order = await Order.findOne(filter).session(session)
+      if (!order) return { httpStatus: 404, message: 'Order not found.' }
+      if (order.orderStatus === status) return { httpStatus: 204 }
+
+      if (customerId && (order.orderStatus !== 'pending' || order.paymentStatus !== 'pending')) {
+        return { httpStatus: 409, message: 'You can only cancel an unpaid order while it is pending.' }
+      }
+      if (!nextStatuses[order.orderStatus]?.includes(status)) {
+        return { httpStatus: 409, message: 'This order cannot move to that status. Reload it to see its current status.' }
+      }
+
+      order.orderStatus = status
+      if (status === 'delivered') order.paymentStatus = 'paid'
+      await order.save({ session })
+
+      if (status === 'cancelled') {
+        for (const { product, quantity } of order.orderItems) {
+          const restored = await Product.updateOne(
+            { _id: product, stock: { $lte: Number.MAX_SAFE_INTEGER - quantity } },
+            { $inc: { stock: quantity, __v: 1 } },
+            { session },
+          )
+          if (restored.modifiedCount !== 1) throw restockFailed
+        }
+      }
+
+      return { httpStatus: 204 }
+    })
+  } catch (error) {
+    if (error !== restockFailed) throw error
+    return { httpStatus: 409, message: 'The order could not be cancelled because stock could not be restored.' }
+  }
+}
 
 function findAttempt(user, checkoutKey, session = null) {
   return Order.findOne({ user, checkoutKey })
@@ -141,4 +190,15 @@ export async function orderDetails(request, response) {
   const order = await Order.findOne({ _id: request.params.id, user: request.user.id }).lean()
   if (!order) return response.status(404).json({ message: 'Order not found.' })
   response.json({ order })
+}
+
+export async function cancelOrder(request, response) {
+  const { id } = request.params
+  if (!mongoose.isObjectIdOrHexString(id)) {
+    return response.status(400).json({ message: 'Enter a valid order ID.' })
+  }
+
+  const result = await changeOrderStatus({ orderId: id, status: 'cancelled', customerId: request.user.id })
+  if (result.message) return response.status(result.httpStatus).json({ message: result.message })
+  response.sendStatus(result.httpStatus)
 }
