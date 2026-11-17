@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import Category from '../models/Category.js'
-import Product from '../models/Product.js'
+import Product, { activeProducts } from '../models/Product.js'
+import { escapeSearch } from '../utils/query.js'
 
 const productSorts = {
   newest: { createdAt: -1, _id: -1 },
@@ -30,7 +31,7 @@ export async function listProducts(request, response) {
     return response.status(400).json({ message: 'Page must be a whole number between 1 and 1000.' })
   }
 
-  const filters = {}
+  const filters = { ...activeProducts }
   if (typeof sort !== 'string' || !Object.hasOwn(productSorts, sort)) {
     return response.status(400).json({ message: 'Choose a valid product sort order.' })
   }
@@ -42,7 +43,7 @@ export async function listProducts(request, response) {
 
     const search = q.trim()
     if (search) {
-      const literalSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const literalSearch = escapeSearch(search)
       filters.name = { $regex: literalSearch, $options: 'i' }
     }
   }
@@ -96,7 +97,7 @@ export async function getProduct(request, response) {
     return response.status(400).json({ message: 'Enter a valid product ID.' })
   }
 
-  const product = await Product.findById(request.params.id).populate('category', 'name slug')
+  const product = await Product.findOne({ _id: request.params.id, ...activeProducts }).populate('category', 'name slug')
   if (!product) {
     return response.status(404).json({ message: 'Product not found.' })
   }

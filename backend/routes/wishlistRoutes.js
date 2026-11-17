@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import mongoose from 'mongoose'
 import { requireUser } from '../middleware/auth.js'
-import Product from '../models/Product.js'
+import Product, { activeProducts } from '../models/Product.js'
 import Wishlist from '../models/Wishlist.js'
 
 const router = Router()
@@ -10,7 +10,7 @@ router.use(requireUser)
 
 router.get('/', async (request, response) => {
   const wishlist = await Wishlist.findOne({ user: request.user.id })
-    .populate('products', 'name price stock images')
+    .populate({ path: 'products', select: 'name price stock images', match: activeProducts })
     .lean()
 
   response.json({ products: wishlist?.products ?? [] })
@@ -26,7 +26,7 @@ router.param('productId', (request, response, next, productId) => {
 
 router.put('/:productId', async (request, response) => {
   const { productId } = request.params
-  if (!(await Product.exists({ _id: productId }))) {
+  if (!(await Product.exists({ _id: productId, ...activeProducts }))) {
     return response.status(404).json({ message: 'Product not found.' })
   }
 

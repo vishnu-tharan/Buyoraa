@@ -4,7 +4,7 @@
 
 ## Phase 1 — Project setup
 
-Buyora is a JavaScript MERN project. The red and yellow storefront supports product browsing, accounts, a shopping cart, a wishlist, and Cash on Delivery orders.
+Buyora is a JavaScript MERN project. It includes a red and yellow storefront, Cash on Delivery checkout, and an admin dashboard for the catalog, inventory, customers, and orders.
 
 The original Phase 1 layout
 
@@ -342,4 +342,46 @@ When earlier changes are already committed, run these commands from the project 
 git add -- backend frontend README.md
 git diff --cached --stat
 git commit -m "Add checkout and orders"
+```
+
+## Phase 6 — Admin dashboard
+
+```text
+backend/
+├── controllers/
+│   ├── adminController.js
+│   ├── adminCatalogController.js
+│   └── adminOrdersController.js
+├── routes/adminRoutes.js
+└── utils/query.js
+frontend/src/pages/
+├── Admin.jsx
+├── AdminCategories.jsx
+├── AdminOrders.jsx
+└── AdminProducts.jsx
+```
+
+The React admin pages call `/api/admin`. Express checks the session and the user's current MongoDB role on every request. The dashboard shows active products, customer accounts, total orders, recent orders, and collected sales in LKR. Collected sales include delivery fees from delivered and paid orders.
+
+Create categories before adding products. The price field takes rupees. Add 1 to 8 image URLs, one per line. Removing a product hides it from the store, cart quotes, and wishlists while preserving the inventory record behind past orders. Move or remove a category's active products before deleting the category. If stock changes while a product is open for editing, reload the product before saving.
+
+An order progresses from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. An admin can cancel a pending or confirmed order and restore its stock. Marking an order delivered records the Cash on Delivery payment as paid.
+
+### Run and verify
+
+Use the MongoDB replica set or Atlas connection from Phase 5. Product saves, category deletion, and status updates use transactions. Start both servers with `npm.cmd run dev` in their respective folders. Sign in with an admin account in your current database using the Phase 2 setup, then open **My account** and select **Admin area**.
+
+1. Create a category and add a product with stock and an image URL. Edit the price or quantity. Verify the change in the public catalog.
+2. Try deleting the category while it has an active product. Remove the product and try again.
+3. Place an order as a customer. In the admin account, open the order, review its items and delivery details, and confirm it. Cancel it and verify that its stock was restored. Process another order through shipping and delivery, then verify the collected sales total.
+4. Search **Customers** by name or email. Sign in as a customer and verify that `/admin` is restricted. In Postman, verify that a customer session receives HTTP 403 from `GET /api/admin/overview`.
+
+### Commit Phase 6
+
+Run these commands from the project root.
+
+```powershell
+git add -- backend frontend README.md
+git diff --cached --stat
+git commit -m "Add admin dashboard"
 ```

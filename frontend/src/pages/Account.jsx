@@ -13,7 +13,7 @@ export function AuthForm({ registerMode = false }) {
   const [error, setError] = useState('')
   const from = state?.from
   const allowedReturn = typeof from === 'string'
-    && /^\/(?:admin(?:\?.*)?|wishlist|checkout|orders(?:\/[a-f0-9]{24}(?:\/success)?|\?page=\d+)?|products\/[a-f0-9]{24})$/i.test(from)
+    && /^\/(?:admin(?:\/(?:products|categories|orders|users)(?:\/(?:new|[a-f0-9]{24}))?)?(?:\?.*)?|wishlist|checkout|orders(?:\/[a-f0-9]{24}(?:\/success)?|\?page=\d+)?|products\/[a-f0-9]{24})$/i.test(from)
   const destination = allowedReturn ? from : '/account'
   const title = registerMode ? 'Create your account' : 'Sign in'
 

@@ -32,6 +32,7 @@ app.use('/api', (request, response, next) => {
   next()
 })
 
+app.use('/api/admin', express.json({ limit: '80kb' }))
 app.use(express.json({ limit: '16kb' }))
 app.use(cookieParser())
 

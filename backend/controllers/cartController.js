@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import Product from '../models/Product.js'
+import Product, { activeProducts } from '../models/Product.js'
 
 const deliveryFee = 35000
 
@@ -29,7 +29,7 @@ export function validateCartItems(items) {
 
 export async function calculateCart(items, session = null) {
   const productIds = items.map(({ productId }) => productId)
-  const products = await Product.find({ _id: { $in: productIds } })
+  const products = await Product.find({ _id: { $in: productIds }, ...activeProducts })
     .select('name price stock images')
     .session(session)
     .lean()

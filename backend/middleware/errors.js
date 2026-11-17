@@ -1,6 +1,10 @@
 export function handleError(error, request, response, next) {
   if (response.headersSent) return next(error)
 
+  if (error.code === 20 && error.name === 'MongoServerError') {
+    return response.status(503).json({ message: 'This change requires a MongoDB replica set.' })
+  }
+
   if (error.type === 'entity.parse.failed') {
     return response.status(400).json({ message: 'The request body must contain valid JSON.' })
   }

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import mongoose from 'mongoose'
 import Order from '../models/Order.js'
-import Product from '../models/Product.js'
+import Product, { activeProducts } from '../models/Product.js'
 import { readAddress, readPhone } from '../utils/address.js'
 import { calculateCart, validateCartItems } from './cartController.js'
 
@@ -70,8 +70,8 @@ export async function placeOrder(request, response) {
       const orderItems = []
       for (const { product, quantity } of quote.lines) {
         const updated = await Product.updateOne(
-          { _id: product._id, stock: { $gte: quantity } },
-          { $inc: { stock: -quantity } },
+          { _id: product._id, stock: { $gte: quantity }, ...activeProducts },
+          { $inc: { stock: -quantity, __v: 1 } },
           { session },
         )
         if (updated.modifiedCount !== 1) throw stockChanged

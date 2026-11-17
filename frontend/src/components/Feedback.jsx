@@ -19,3 +19,22 @@ export function PageMessage({ children, error = false, onRetry, linkTo, linkLabe
     </div>
   )
 }
+
+export function Pagination({ data, path, params, label }) {
+  const pages = Math.min(1000, Math.ceil(data.total / data.pageSize))
+  if (pages <= 1 && data.page <= 1) return null
+
+  function pageLink(page) {
+    const next = new URLSearchParams(params)
+    next.set('page', page)
+    return `${path}?${next}`
+  }
+
+  return (
+    <nav className="pagination" aria-label={label}>
+      {data.page > 1 && <Link to={pageLink(Math.min(data.page - 1, Math.max(pages, 1)))} className="button button-outline">Previous</Link>}
+      <span>Page {data.page}</span>
+      {data.page < pages && <Link to={pageLink(data.page + 1)} className="button button-outline">Next</Link>}
+    </nav>
+  )
+}

@@ -1,5 +1,7 @@
 import mongoose from 'mongoose'
 
+export const activeProducts = { archived: { $ne: true } }
+
 const productSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 150 },
@@ -22,6 +24,7 @@ const productSchema = new mongoose.Schema(
     },
     stock: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
     featured: { type: Boolean, default: false },
+    archived: { type: Boolean, default: false },
   },
   { timestamps: true },
 )

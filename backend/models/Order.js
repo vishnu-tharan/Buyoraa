@@ -1,6 +1,8 @@
 import mongoose from 'mongoose'
 import { addressFields } from './User.js'
 
+export const orderStatuses = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']
+
 const orderItemSchema = new mongoose.Schema(
   {
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
@@ -40,7 +42,7 @@ const orderSchema = new mongoose.Schema(
     paymentStatus: { type: String, enum: ['pending', 'paid'], default: 'pending' },
     orderStatus: {
       type: String,
-      enum: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'],
+      enum: orderStatuses,
       default: 'pending',
     },
   },

@@ -3,7 +3,10 @@ import { useAuth } from './AuthContext.jsx'
 import { Loading, PageMessage } from './components/Feedback.jsx'
 import StoreLayout from './components/StoreLayout.jsx'
 import { Account, AuthForm } from './pages/Account.jsx'
-import Admin, { AdminLayout } from './pages/Admin.jsx'
+import AdminOverview, { AdminLayout, AdminUsers } from './pages/Admin.jsx'
+import AdminCategories from './pages/AdminCategories.jsx'
+import { AdminOrderDetails, AdminOrders } from './pages/AdminOrders.jsx'
+import { AdminProductForm, AdminProducts } from './pages/AdminProducts.jsx'
 import Cart from './pages/Cart.jsx'
 import { Catalog, ProductDetails } from './pages/Catalog.jsx'
 import Checkout from './pages/Checkout.jsx'
@@ -53,9 +56,17 @@ export default function App() {
           <PageMessage linkTo="/" linkLabel="Back to the store">Page not found.</PageMessage>
         } />
       </Route>
-      <Route path="admin" element={<AdminLayout />}>
-        <Route element={<ProtectedRoute adminOnly />}>
-          <Route index element={<Admin />} />
+      <Route element={<ProtectedRoute adminOnly />}>
+        <Route path="admin" element={<AdminLayout />}>
+          <Route index element={<AdminOverview />} />
+          <Route path="products" element={<AdminProducts />} />
+          <Route path="products/new" element={<AdminProductForm />} />
+          <Route path="products/:id" element={<AdminProductForm />} />
+          <Route path="categories" element={<AdminCategories />} />
+          <Route path="orders" element={<AdminOrders />} />
+          <Route path="orders/:id" element={<AdminOrderDetails />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="*" element={<PageMessage linkTo="/admin" linkLabel="Back to overview">Admin page not found.</PageMessage>} />
         </Route>
       </Route>
     </Routes>
