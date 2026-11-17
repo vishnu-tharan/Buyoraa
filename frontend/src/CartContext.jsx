@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { useAuth } from './AuthContext.jsx'
 
 const CartContext = createContext(null)
 const storageKey = 'buyora-cart'
@@ -32,6 +33,7 @@ function readCart() {
 }
 
 export function CartProvider({ children }) {
+  const { user } = useAuth()
   const [items, setItems] = useState(readCart)
   const latestItems = useRef(items)
 
@@ -41,6 +43,8 @@ export function CartProvider({ children }) {
   }, [items])
 
   function addItem(product, { onlyIfMissing = false } = {}) {
+    if (!user) return 'Sign in to add items to your cart.'
+
     const current = items.find(({ productId }) => productId === product._id)
     if (current && onlyIfMissing) return ''
 
@@ -63,7 +67,7 @@ export function CartProvider({ children }) {
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) return
 
     setItems((previous) => previous.map((item) => (
-      item.productId === productId ? { ...item, quantity } : item
+      item.productId === productId && (user || quantity <= item.quantity) ? { ...item, quantity } : item
     )))
   }
 

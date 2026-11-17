@@ -231,9 +231,15 @@ function ProductActions({ product }) {
   return (
     <div className="mt-5">
       <div className="flex flex-wrap gap-3">
-        <button type="button" className="button button-red" disabled={product.stock === 0} onClick={addToCart}>
-          <ShoppingBag size={17} aria-hidden="true" /> Add to cart
-        </button>
+        {!loading && !user && product.stock > 0 ? (
+          <Link to="/login" state={{ from: `/products/${product._id}` }} className="button button-red">
+            <ShoppingBag size={17} aria-hidden="true" /> Sign in to add to cart
+          </Link>
+        ) : (
+          <button type="button" className="button button-red" disabled={loading || product.stock === 0} onClick={addToCart}>
+            <ShoppingBag size={17} aria-hidden="true" /> Add to cart
+          </button>
+        )}
         {!loading && user && (
           <button type="button" className="button button-outline" disabled={saving || saved} onClick={saveProduct}>
             <Heart size={17} aria-hidden="true" /> {saved ? 'Saved to wishlist' : 'Save to wishlist'}

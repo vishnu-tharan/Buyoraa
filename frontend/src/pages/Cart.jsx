@@ -1,14 +1,22 @@
 import { Minus, Plus, Trash2 } from 'lucide-react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { errorMessage, useApi } from '../api.js'
+import { useAuth } from '../AuthContext.jsx'
 import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage } from '../components/Feedback.jsx'
 import OrderSummary from '../components/OrderSummary.jsx'
 import { formatPrice, ProductImage } from '../components/ProductGrid.jsx'
 
 function CartItem({ line }) {
+  const { user, loading } = useAuth()
+  const navigate = useNavigate()
   const { setQuantity, removeItem } = useCart()
   const { productId, product, quantity, available, lineTotal } = line
+
+  function increaseQuantity() {
+    if (user) setQuantity(productId, quantity + 1)
+    else navigate('/login', { state: { from: '/cart' } })
+  }
 
   return (
     <li className="shopping-row">
@@ -38,7 +46,12 @@ function CartItem({ line }) {
               <Minus size={16} aria-hidden="true" />
             </button>
             <span>{quantity}</span>
-            <button type="button" aria-label={`Increase ${product.name} quantity`} disabled={quantity >= Math.min(product.stock, 99)} onClick={() => setQuantity(productId, quantity + 1)}>
+            <button
+              type="button"
+              aria-label={`${user ? 'Increase' : 'Sign in to increase'} ${product.name} quantity`}
+              disabled={loading || quantity >= Math.min(product.stock, 99)}
+              onClick={increaseQuantity}
+            >
               <Plus size={16} aria-hidden="true" />
             </button>
           </div>
