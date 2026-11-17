@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { useApi } from '../api.js'
 import { useAuth } from '../AuthContext.jsx'
 import { Loading, PageMessage } from '../components/Feedback.jsx'
-import ProductGrid from '../components/ProductGrid.jsx'
+import ProductGrid, { ProductGridSkeleton } from '../components/ProductGrid.jsx'
 
 const heroImage = 'https://images.unsplash.com/photo-1760565030282-8fb986077e0d?auto=format&fit=crop&w=1200&q=82'
 
@@ -38,7 +38,7 @@ function ProductShelf({ title, endpoint, emptyMessage }) {
         <h2>{title}</h2>
         <Link to={endpoint} className="text-link">View all <ArrowRight size={16} aria-hidden="true" /></Link>
       </div>
-      {loading && <Loading label="Loading products…" />}
+      {loading && <ProductGridSkeleton />}
       {error && <PageMessage error onRetry={retry}>We couldn’t load these products.</PageMessage>}
       {data && products.length === 0 && <PageMessage>{emptyMessage}</PageMessage>}
       {products.length > 0 && <ProductGrid products={products.slice(0, 4)} />}

@@ -1,4 +1,7 @@
 import 'dotenv/config'
+import { existsSync } from 'node:fs'
+import { extname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import cookieParser from 'cookie-parser'
 import express from 'express'
 import mongoose from 'mongoose'
@@ -13,12 +16,16 @@ import userRoutes from './routes/userRoutes.js'
 import wishlistRoutes from './routes/wishlistRoutes.js'
 
 const app = express()
-const host = '127.0.0.1'
-const port = 5000
+const production = process.env.NODE_ENV === 'production'
+const host = process.env.HOST || (production ? '0.0.0.0' : '127.0.0.1')
+const port = Number(process.env.PORT || 5000)
 const mongoUri = process.env.MONGODB_URI
-const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://127.0.0.1:5173'
+const frontendOrigin = process.env.FRONTEND_ORIGIN || (production ? '' : 'http://127.0.0.1:5173')
+const frontendBuild = fileURLToPath(new URL('../frontend/dist/', import.meta.url))
+const frontendIndex = fileURLToPath(new URL('../frontend/dist/index.html', import.meta.url))
 
 app.disable('x-powered-by')
+if (process.env.TRUST_PROXY) app.set('trust proxy', process.env.TRUST_PROXY)
 
 // Browser requests use Vite's same-origin proxy during development.
 app.use('/api', (request, response, next) => {
@@ -53,12 +60,44 @@ app.use('/api/users', userRoutes)
 app.use('/api/wishlist', wishlistRoutes)
 app.use('/api', catalogRoutes)
 
-app.use((request, response) => {
+function routeNotFound(request, response) {
   response.status(404).json({ message: 'Route not found.' })
-})
+}
+
+app.use('/api', routeNotFound)
+
+if (production) {
+  app.use(express.static(frontendBuild, { index: false }))
+  app.get('/{*path}', (request, response, next) => {
+    if (extname(request.path) || !request.accepts('html')) return next()
+    response.set('Cache-Control', 'no-cache').sendFile(frontendIndex)
+  })
+}
+
+app.use(routeNotFound)
 app.use(handleError)
 
 async function start() {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    console.error('Set PORT to a whole number between 1 and 65535.')
+    process.exitCode = 1
+    return
+  }
+
+  if (production) {
+    const origin = URL.parse(frontendOrigin)
+    if (origin?.protocol !== 'https:' || origin.origin !== frontendOrigin) {
+      console.error('Set FRONTEND_ORIGIN to the exact public HTTPS origin, without a trailing slash.')
+      process.exitCode = 1
+      return
+    }
+    if (!existsSync(frontendIndex)) {
+      console.error('Build the frontend before starting Buyora in production.')
+      process.exitCode = 1
+      return
+    }
+  }
+
   if (!mongoUri) {
     console.error('MONGODB_URI is missing. Copy .env.example to .env.')
     process.exitCode = 1

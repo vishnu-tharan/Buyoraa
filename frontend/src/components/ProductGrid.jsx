@@ -50,3 +50,19 @@ export default function ProductGrid({ products }) {
     </div>
   )
 }
+
+export function ProductGridSkeleton() {
+  return (
+    <div role="status">
+      <span className="sr-only">Loading products…</span>
+      <div className="product-grid" aria-hidden="true">
+        {[1, 2, 3, 4].map((item) => (
+          <div className="product-card motion-safe:animate-pulse" key={item}>
+            <div className="product-image" />
+            <div className="product-card-info product-skeleton-lines"><span /><span /></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}

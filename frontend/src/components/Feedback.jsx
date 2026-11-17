@@ -1,4 +1,5 @@
-import { LoaderCircle } from 'lucide-react'
+import { CircleCheck, LoaderCircle, X } from 'lucide-react'
+import { useEffect } from 'react'
 import { Link } from 'react-router'
 
 export function Loading({ label = 'Loading…' }) {
@@ -7,6 +8,20 @@ export function Loading({ label = 'Loading…' }) {
       <LoaderCircle size={19} className="text-brand-red motion-safe:animate-spin" aria-hidden="true" />
       {label}
     </p>
+  )
+}
+
+export function Toast({ notice, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(() => onClose(null), 5000)
+    return () => clearTimeout(timer)
+  }, [notice, onClose])
+
+  return (
+    <div className="store-toast">
+      <p role="status"><CircleCheck size={19} aria-hidden="true" /> {notice.message}</p>
+      <button type="button" aria-label="Dismiss message" onClick={() => onClose(null)}><X size={18} aria-hidden="true" /></button>
+    </div>
   )
 }
 

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
 import { useCart } from '../CartContext.jsx'
-import { Loading, PageMessage } from '../components/Feedback.jsx'
+import { Loading, PageMessage, Toast } from '../components/Feedback.jsx'
 import { formatPrice, ProductImage } from '../components/ProductGrid.jsx'
 
 export default function Wishlist() {
@@ -41,7 +41,8 @@ export default function Wishlist() {
   return (
     <section>
       <div className="page-heading"><h1>Wishlist</h1></div>
-      {notice && <p className={notice.error ? 'form-error mb-4' : 'mb-4'} role={notice.error ? 'alert' : 'status'}>{notice.message}</p>}
+      {notice?.error && <p className="form-error mb-4" role="alert">{notice.message}</p>}
+      {notice && !notice.error && <Toast notice={notice} onClose={setNotice} />}
       {loading && <Loading label="Loading saved products…" />}
       {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load your wishlist.')}</PageMessage>}
       {data?.products.length === 0 && (

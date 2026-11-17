@@ -4,8 +4,8 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
 import { useAuth } from '../AuthContext.jsx'
 import { useCart } from '../CartContext.jsx'
-import { Loading, PageMessage } from '../components/Feedback.jsx'
-import ProductGrid, { formatPrice, ProductImage } from '../components/ProductGrid.jsx'
+import { Loading, PageMessage, Toast } from '../components/Feedback.jsx'
+import ProductGrid, { formatPrice, ProductGridSkeleton, ProductImage } from '../components/ProductGrid.jsx'
 
 function pageLink(params, page) {
   const nextParams = new URLSearchParams(params)
@@ -100,7 +100,7 @@ export function Catalog() {
 
       <CatalogFilters key={params.toString()} params={params} setParams={setParams} categories={categories} />
 
-      {loading && <Loading label="Loading products…" />}
+      {loading && <ProductGridSkeleton />}
       {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load the products.')}</PageMessage>}
       {data && data.products.length === 0 && (
         <PageMessage linkTo={data.page > 1 ? pageLink(params, 1) : undefined} linkLabel="Go to first page">
@@ -245,11 +245,8 @@ function ProductActions({ product }) {
           </Link>
         )}
       </div>
-      {notice && (
-        <p className={notice.error ? 'form-error mt-3' : 'mt-3 text-sm'} role={notice.error ? 'alert' : 'status'}>
-          {notice.message}
-        </p>
-      )}
+      {notice?.error && <p className="form-error mt-3" role="alert">{notice.message}</p>}
+      {notice && !notice.error && <Toast notice={notice} onClose={setNotice} />}
     </div>
   )
 }
