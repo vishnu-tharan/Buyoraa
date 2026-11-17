@@ -4,7 +4,9 @@
 
 ## Phase 1 — Project setup
 
-Buyora is a JavaScript MERN project. This phase sets up the red and yellow welcome screen, the Express API, and a check that tests the MongoDB connection. Shopping and account features come in later phases.
+Buyora is a JavaScript MERN project. Phase 1 set up the red and yellow welcome screen, the Express API, and a check that tests the MongoDB connection. Phase 2 adds the database models and the first account and catalog APIs.
+
+The original Phase 1 layout
 
 ```text
 Buyora/
@@ -42,10 +44,21 @@ In a PowerShell terminal opened at the project root, start the backend.
 cd backend
 npm.cmd ci
 Copy-Item .env.example .env
-npm.cmd run dev
 ```
 
-If you already have a `.env` file, keep it and skip the copy command. For Atlas, update `MONGODB_URI` in `backend/.env` before starting the server. Use your database user's credentials and include `buyora` as the database name.
+If you already have a `.env` file, keep it and skip the copy command. For Atlas, update `MONGODB_URI` in `backend/.env` with your database user's credentials and include `buyora` as the database name.
+
+Generate a signing secret from the backend terminal and paste the output after `JWT_SECRET=` in `backend/.env`. The same file holds `FRONTEND_ORIGIN`, which defaults to `http://127.0.0.1:5173`.
+
+```powershell
+node -p "require('node:crypto').randomBytes(32).toString('hex')"
+```
+
+After saving the secret in `.env`, start the backend.
+
+```powershell
+npm.cmd run dev
+```
 
 In a second terminal opened at the project root, start the frontend.
 
@@ -71,7 +84,9 @@ npm.cmd run dev
 | Message or symptom | What to check |
 | --- | --- |
 | `MONGODB_URI is missing` | Create `backend/.env` from the example and run the API from `backend`. |
-| `MongoDB connection failed` | Start the local MongoDB service or check the Atlas credentials and network access settings. |
+| `MongoDB setup failed` | Start the local MongoDB service or check the Atlas credentials and network access settings. |
+| `Set JWT_SECRET to a random value` | Generate a secret using the command above and save it in `backend/.env`. |
+| `This request origin is not allowed` | Open the frontend at `http://127.0.0.1:5173` or set `FRONTEND_ORIGIN` to the exact frontend origin. |
 | `EADDRINUSE` or a port is already in use | Stop the process already using port 5000 or 5173, then restart the matching Buyora server. |
 | The welcome screen reports an unavailable connection | Check the backend terminal and try the API URL directly in Postman. |
 
@@ -92,3 +107,68 @@ To publish your commit, create an empty GitHub repository, then substitute your 
 git remote add origin https://github.com/YOUR-USERNAME/Buyora.git
 git push -u origin main
 ```
+
+## Phase 2 — Backend foundation
+
+```text
+backend/
+├── config/
+│   └── database.js
+├── controllers/
+│   ├── authController.js
+│   └── catalogController.js
+├── middleware/
+│   ├── auth.js
+│   └── errors.js
+├── models/
+│   ├── Category.js
+│   ├── Order.js
+│   ├── Product.js
+│   ├── User.js
+│   └── Wishlist.js
+├── routes/
+│   ├── adminRoutes.js
+│   ├── authRoutes.js
+│   └── catalogRoutes.js
+├── utils/
+│   └── session.js
+├── .env.example
+├── package.json
+├── package-lock.json
+└── server.js
+```
+
+Express sends requests to the route handlers. The controllers validate input and use the Mongoose models to read or write MongoDB. Registration hashes passwords with bcrypt. Registration and login set an HTTP-only session cookie that expires after one day. On later requests, the middleware verifies the cookie and loads the current account and role from MongoDB.
+
+The frontend will call these routes through the Vite proxy in Phase 3. Use Postman for this phase. Product prices and order amounts are integers in the currency's smallest unit. For example, `250000` represents `Rs. 2,500.00`.
+
+### Test the API in Postman
+
+Start MongoDB and run `npm.cmd run dev` from `backend`. Use `http://127.0.0.1:5000` for every request so Postman can reuse the session cookie.
+
+| Method and path | Expected result |
+| --- | --- |
+| `POST /api/auth/register` | Send a JSON object with `name`, `email`, and `password`. Expect 201 and a customer account. Reusing the email returns 409. |
+| `GET /api/auth/me` | Returns the signed-in account. A request without a session returns 401. |
+| `POST /api/auth/logout` | Clears the session cookie and returns 204. |
+| `POST /api/auth/login` | Send the email and password as JSON. Expect 200 and a session cookie, or 401 for incorrect credentials. |
+| `GET /api/admin/users?page=1` | Returns customer accounts for an admin. A signed-in customer receives 403. |
+| `GET /api/categories` | Returns the category list. |
+| `GET /api/products?page=1` | Returns up to 24 products and the total count. |
+| `GET /api/products/:id` | Returns a product by MongoDB ID. An unknown ID returns 404. |
+
+On a fresh database, the catalog lists are empty. Seeding and the storefront use those lists in later phases.
+
+To test admin access locally, register a second account. In MongoDB Compass, open the `users` collection in your Buyora database, find that account by email, and set its `role` to `admin`. Log in using that account and retry the admin request. The public registration API always creates customers.
+
+### Commit Phase 2
+
+Run these commands from the project root.
+
+```powershell
+git add -- backend README.md
+git diff --cached --stat
+git commit -m "Add backend foundation"
+```
+
+To publish the commit to the configured GitHub repository, run `git push origin main`.
