@@ -2,6 +2,8 @@
 
 **Discover More. Shop Better.**
 
+[Visit the live store](https://buyoraa.onrender.com)
+
 Buyora is a JavaScript MERN store with a responsive red and yellow storefront. Customers can search and filter products, save a wishlist, manage delivery addresses, and place Cash on Delivery orders in Sri Lankan rupees. Admins can manage the catalog and stock, update orders, search customers, and view collected sales.
 
 ## Project layout
