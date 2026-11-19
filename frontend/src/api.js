@@ -7,6 +7,30 @@ export const api = axios.create({
   withCredentials: true,
 })
 
+const recentProductsKey = 'buyora-recent-products'
+
+export function readRecentProducts() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(recentProductsKey))
+    if (!Array.isArray(saved)) return []
+
+    return [...new Set(saved
+      .filter((id) => typeof id === 'string' && /^[a-f0-9]{24}$/i.test(id))
+      .map((id) => id.toLowerCase()))].slice(0, 5)
+  } catch {
+    return []
+  }
+}
+
+export function rememberProduct(productId) {
+  const recent = readRecentProducts().filter((id) => id !== productId)
+  try {
+    localStorage.setItem(recentProductsKey, JSON.stringify([productId, ...recent].slice(0, 5)))
+  } catch {
+    // Product browsing still works when browser storage is unavailable.
+  }
+}
+
 export function errorMessage(error, fallback) {
   const message = error.response?.data?.message
   return typeof message === 'string' ? message : fallback

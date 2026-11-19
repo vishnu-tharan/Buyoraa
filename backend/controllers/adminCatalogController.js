@@ -44,17 +44,25 @@ function categoryFields(input = {}) {
 }
 
 export async function adminProducts(request, response) {
-  const page = readPage(request.query.page)
+  const { page: requestedPage, lowStock } = request.query
+  const page = readPage(requestedPage)
   if (!page) return response.status(400).json({ message: 'Enter a valid page number.' })
+  if (lowStock !== undefined && lowStock !== 'true' && lowStock !== 'false') {
+    return response.status(400).json({ message: 'Low stock must be true or false.' })
+  }
+
+  const filters = { ...activeProducts }
+  if (lowStock === 'true') filters.stock = { $gte: 1, $lte: 5 }
+
   const pageSize = 20
   const [products, total] = await Promise.all([
-    Product.find(activeProducts)
+    Product.find(filters)
       .populate('category', 'name')
       .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * pageSize)
       .limit(pageSize)
       .lean(),
-    Product.countDocuments(activeProducts),
+    Product.countDocuments(filters),
   ])
 
   response.json({ products, page, pageSize, total })

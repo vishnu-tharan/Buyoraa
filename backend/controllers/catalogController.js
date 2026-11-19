@@ -23,7 +23,7 @@ export async function listCategories(request, response) {
 }
 
 export async function listProducts(request, response) {
-  const { page = '1', category, featured, q, minPrice, maxPrice, sort = 'newest' } = request.query
+  const { page = '1', category, featured, q, minPrice, maxPrice, inStock, sort = 'newest' } = request.query
   const pageNumber = Number(page)
   const pageSize = 24
 
@@ -32,6 +32,11 @@ export async function listProducts(request, response) {
   }
 
   const filters = { ...activeProducts }
+  if (inStock !== undefined && inStock !== 'true' && inStock !== 'false') {
+    return response.status(400).json({ message: 'In stock must be true or false.' })
+  }
+  if (inStock === 'true') filters.stock = { $gt: 0 }
+
   if (typeof sort !== 'string' || !Object.hasOwn(productSorts, sort)) {
     return response.status(400).json({ message: 'Choose a valid product sort order.' })
   }
@@ -92,6 +97,28 @@ export async function listProducts(request, response) {
   response.json({ products, page: pageNumber, pageSize, total })
 }
 
+export async function recentProducts(request, response) {
+  const { ids } = request.query
+  if (typeof ids !== 'string') {
+    return response.status(400).json({ message: 'Provide up to five valid product IDs.' })
+  }
+
+  const productIds = ids.split(',')
+  if (productIds.length > 5 || !productIds.every((id) => mongoose.isObjectIdOrHexString(id))) {
+    return response.status(400).json({ message: 'Provide up to five valid product IDs.' })
+  }
+
+  const orderedIds = [...new Set(productIds.map((id) => id.toLowerCase()))]
+  const products = await Product.find({ ...activeProducts, _id: { $in: orderedIds } })
+    .populate('category', 'name slug')
+    .lean()
+  const byId = new Map(products.map((product) => [String(product._id), product]))
+
+  response.set('Cache-Control', 'no-store').json({
+    products: orderedIds.map((id) => byId.get(id)).filter(Boolean),
+  })
+}
+
 export async function getProduct(request, response) {
   if (!mongoose.isObjectIdOrHexString(request.params.id)) {
     return response.status(400).json({ message: 'Enter a valid product ID.' })
@@ -102,5 +129,17 @@ export async function getProduct(request, response) {
     return response.status(404).json({ message: 'Product not found.' })
   }
 
-  response.json({ product })
+  const relatedProducts = product.category
+    ? await Product.find({
+      ...activeProducts,
+      category: product.category._id,
+      _id: { $ne: product._id },
+      stock: { $gt: 0 },
+    })
+      .populate('category', 'name slug')
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(4)
+    : []
+
+  response.json({ product, relatedProducts })
 }

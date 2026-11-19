@@ -367,7 +367,7 @@ body {
   background: white;
 }
 
-.catalog-filters label {
+.catalog-filters > label {
   display: grid;
   align-content: end;
   gap: 0.35rem;
@@ -387,7 +387,7 @@ body {
 }
 
 .catalog-filters select,
-.catalog-filters input,
+.catalog-filters input:not([type="checkbox"]),
 .account-form input {
   width: 100%;
   max-width: 100%;

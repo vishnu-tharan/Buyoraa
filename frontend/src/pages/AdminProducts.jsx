@@ -5,12 +5,21 @@ import { Loading, PageMessage, Pagination } from '../components/Feedback.jsx'
 import { formatPrice, ProductImage } from '../components/ProductGrid.jsx'
 
 export function AdminProducts() {
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const { state } = useLocation()
   const { data, error, loading, retry } = useApi(`/admin/products?${params}`)
+  const lowStock = params.get('lowStock') === 'true'
   const [removing, setRemoving] = useState(false)
   const [notice, setNotice] = useState(null)
   const displayedNotice = notice ?? (state?.message ? { message: state.message } : null)
+
+  function changeStockFilter(event) {
+    const nextParams = new URLSearchParams(params)
+    nextParams.delete('page')
+    if (event.target.checked) nextParams.set('lowStock', 'true')
+    else nextParams.delete('lowStock')
+    setParams(nextParams)
+  }
 
   async function removeProduct(product) {
     if (!window.confirm(`Remove "${product.name}" from the store?`)) return
@@ -34,12 +43,18 @@ export function AdminProducts() {
         <h1>Products</h1>
         <Link to="/admin/products/new" className="button button-red">Add product</Link>
       </div>
+      <label className="mb-4 inline-flex items-center gap-2 text-sm font-semibold">
+        <input type="checkbox" checked={lowStock} onChange={changeStockFilter} className="size-4 accent-brand-red" />
+        Low stock only (1–5 units)
+      </label>
       {displayedNotice && (
         <p className={displayedNotice.error ? 'form-error mb-4' : 'mb-4'} role={displayedNotice.error ? 'alert' : 'status'}>{displayedNotice.message}</p>
       )}
       {loading && <Loading label="Loading products…" />}
       {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load products.')}</PageMessage>}
-      {data?.products.length === 0 && <PageMessage>No active products on this page.</PageMessage>}
+      {data?.products.length === 0 && (
+        <PageMessage>{lowStock ? 'No low-stock products on this page.' : 'No active products on this page.'}</PageMessage>
+      )}
       {data?.products.length > 0 && (
         <div className="admin-table">
           <table>

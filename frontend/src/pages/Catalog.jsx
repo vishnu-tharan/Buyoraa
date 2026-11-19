@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Heart, PackageCheck, PackageX, Search, ShoppingBag } from 'lucide-react'
-import { useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router'
-import { api, errorMessage, useApi } from '../api.js'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useParams, useSearchParams } from 'react-router'
+import { api, errorMessage, rememberProduct, useApi } from '../api.js'
 import { useAuth } from '../AuthContext.jsx'
 import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage, Toast } from '../components/Feedback.jsx'
@@ -15,7 +15,7 @@ function pageLink(params, page) {
 
 function CatalogFilters({ params, setParams, categories }) {
   const [error, setError] = useState('')
-  const category = params.get('category') || ''
+  const [category, setCategory] = useState(params.get('category') || '')
   const categoryList = categories.data?.categories ?? []
 
   function applyFilters(event) {
@@ -47,7 +47,7 @@ function CatalogFilters({ params, setParams, categories }) {
       </label>
       <label>
         Category
-        <select name="category" defaultValue={category}>
+        <select name="category" value={category} onChange={(event) => setCategory(event.target.value)}>
           <option value="">All categories</option>
           {category && !categoryList.some(({ slug }) => slug === category) && (
             <option value={category}>{category}</option>
@@ -72,6 +72,10 @@ function CatalogFilters({ params, setParams, categories }) {
         </select>
       </label>
       <div className="filter-actions">
+        <label className="inline-flex items-center gap-2 text-sm font-semibold">
+          <input type="checkbox" name="inStock" value="true" defaultChecked={params.get('inStock') === 'true'} className="size-4 accent-brand-red" />
+          In stock only
+        </label>
         <button className="button button-red" type="submit"><Search size={17} aria-hidden="true" /> Apply filters</button>
         {params.size > 0 && <Link to="/products" className="text-link">Clear filters</Link>}
         {categories.error && <button type="button" className="text-link" onClick={categories.retry}>Reload categories</button>}
@@ -107,7 +111,9 @@ export function Catalog() {
           No products found.
         </PageMessage>
       )}
-      {data && data.products.length > 0 && <ProductGrid products={data.products} />}
+      {data && data.products.length > 0 && (
+        <ProductGrid products={data.products} linkState={{ catalogReturn: `/products${productQuery}` }} />
+      )}
       {data && pageCount > 1 && data.page <= pageCount && (
         <nav className="pagination" aria-label="Product pages">
           {data.page > 1 && (
@@ -129,6 +135,11 @@ export function Catalog() {
 
 export function ProductDetails() {
   const { id } = useParams()
+  const { state } = useLocation()
+  const savedReturn = state?.catalogReturn
+  const catalogReturn = typeof savedReturn === 'string' && /^\/products(?:\?[^#]*)?$/.test(savedReturn)
+    ? savedReturn
+    : '/products'
   const { data, error, loading, retry } = useApi(`/products/${encodeURIComponent(id)}`)
 
   if (loading) return <Loading label="Loading product…" />
@@ -137,13 +148,13 @@ export function ProductDetails() {
     const missing = status === 400 || status === 404
 
     return (
-      <PageMessage error={!missing} onRetry={missing ? undefined : retry} linkTo="/products" linkLabel="Back to products">
+      <PageMessage error={!missing} onRetry={missing ? undefined : retry} linkTo={catalogReturn} linkLabel="Back to products">
         {missing ? 'Product not found.' : 'We couldn’t load this product.'}
       </PageMessage>
     )
   }
 
-  return <ProductInformation key={data.product._id} product={data.product} />
+  return <ProductInformation key={data.product._id} product={data.product} relatedProducts={data.relatedProducts ?? []} catalogReturn={catalogReturn} />
 }
 
 function ProductPhotos({ product }) {
@@ -171,13 +182,17 @@ function ProductPhotos({ product }) {
   )
 }
 
-function ProductInformation({ product }) {
+function ProductInformation({ product, relatedProducts, catalogReturn }) {
+  useEffect(() => {
+    rememberProduct(product._id)
+  }, [product._id])
+
   const available = product.stock > 0
   const StockIcon = available ? PackageCheck : PackageX
 
   return (
     <article>
-      <Link to="/products" className="text-link mb-5">
+      <Link to={catalogReturn} className="text-link mb-5">
         <ChevronLeft size={17} aria-hidden="true" /> Back to products
       </Link>
       <div className="product-detail">
@@ -195,14 +210,22 @@ function ProductInformation({ product }) {
             {available ? 'In stock' : 'Out of stock'}
           </p>
           <p className="product-description">{product.description}</p>
-          <ProductActions product={product} />
+          <ProductActions product={product} catalogReturn={catalogReturn} />
         </div>
       </div>
+      {relatedProducts.length > 0 && (
+        <section className="home-section" aria-labelledby="related-products-heading">
+          <div className="section-heading">
+            <h2 id="related-products-heading">Related products</h2>
+          </div>
+          <ProductGrid products={relatedProducts} linkState={{ catalogReturn }} />
+        </section>
+      )}
     </article>
   )
 }
 
-function ProductActions({ product }) {
+function ProductActions({ product, catalogReturn }) {
   const { user, loading } = useAuth()
   const { addItem } = useCart()
   const [notice, setNotice] = useState(null)
@@ -232,7 +255,7 @@ function ProductActions({ product }) {
     <div className="mt-5">
       <div className="flex flex-wrap gap-3">
         {!loading && !user && product.stock > 0 ? (
-          <Link to="/login" state={{ from: `/products/${product._id}` }} className="button button-red">
+          <Link to="/login" state={{ from: `/products/${product._id}`, catalogReturn }} className="button button-red">
             <ShoppingBag size={17} aria-hidden="true" /> Sign in to add to cart
           </Link>
         ) : (
@@ -246,7 +269,7 @@ function ProductActions({ product }) {
           </button>
         )}
         {!loading && !user && (
-          <Link to="/login" state={{ from: `/products/${product._id}` }} className="button button-outline">
+          <Link to="/login" state={{ from: `/products/${product._id}`, catalogReturn }} className="button button-outline">
             <Heart size={17} aria-hidden="true" /> Sign in to save
           </Link>
         )}

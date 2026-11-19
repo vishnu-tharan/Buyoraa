@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import mongoose from 'mongoose'
-import Order from '../models/Order.js'
+import Order, { orderStatuses } from '../models/Order.js'
 import Product, { activeProducts } from '../models/Product.js'
 import { readAddress, readPhone } from '../utils/address.js'
 import { calculateCart, validateCartItems } from './cartController.js'
@@ -161,7 +161,7 @@ export async function placeOrder(request, response) {
 }
 
 export async function listOrders(request, response) {
-  const { page = '1' } = request.query
+  const { page = '1', q = '', status } = request.query
   const pageNumber = Number(page)
   const pageSize = 20
 
@@ -170,6 +170,23 @@ export async function listOrders(request, response) {
   }
 
   const filter = { user: request.user.id }
+  if (typeof q !== 'string' || q.length > 25) {
+    return response.status(400).json({ message: 'Enter the 8-character order number or full order ID.' })
+  }
+  const orderNumber = q.trim().replace(/^#/, '').toLowerCase()
+  if (q.trim() && !/^(?:[a-f0-9]{8}|[a-f0-9]{24})$/.test(orderNumber)) {
+    return response.status(400).json({ message: 'Enter the 8-character order number or full order ID.' })
+  }
+  if (status !== undefined && !orderStatuses.includes(status)) {
+    return response.status(400).json({ message: 'Choose a valid order status.' })
+  }
+
+  if (status) filter.orderStatus = status
+  if (orderNumber.length === 24) filter._id = new mongoose.Types.ObjectId(orderNumber)
+  if (orderNumber.length === 8) {
+    filter.$expr = { $eq: [{ $substrCP: [{ $toString: '$_id' }, 16, 8] }, orderNumber] }
+  }
+
   const [orders, total] = await Promise.all([
     Order.find(filter)
       .select('createdAt orderStatus paymentStatus totalAmount orderItems')

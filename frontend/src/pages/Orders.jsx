@@ -1,27 +1,61 @@
-import { CircleCheck } from 'lucide-react'
+import { CircleCheck, Copy } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
 import { useCart } from '../CartContext.jsx'
-import { Loading, PageMessage } from '../components/Feedback.jsx'
+import { Loading, PageMessage, Pagination } from '../components/Feedback.jsx'
 import OrderSummary from '../components/OrderSummary.jsx'
 import { formatPrice } from '../components/ProductGrid.jsx'
 
 const orderDate = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium' })
+const orderStatuses = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']
 
 export function Orders() {
-  const [params] = useSearchParams()
-  const page = params.get('page') ?? '1'
-  const { data, loading, error, retry } = useApi(`/orders?page=${encodeURIComponent(page)}`)
+  const [params, setParams] = useSearchParams()
+  const { data, loading, error, retry } = useApi(`/orders?${params}`)
+  const filtered = Boolean(params.get('q') || params.get('status'))
+
+  function applyFilters(event) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const nextParams = new URLSearchParams()
+    const q = form.get('q').trim()
+    const status = form.get('status')
+    if (q) nextParams.set('q', q)
+    if (status) nextParams.set('status', status)
+    setParams(nextParams)
+  }
 
   return (
     <section>
       <div className="page-heading"><h1>My orders</h1></div>
+      <form key={params.toString()} className="admin-search" onSubmit={applyFilters}>
+        <label>
+          Order number
+          <input
+            type="search" name="q" defaultValue={params.get('q') ?? ''}
+            placeholder="#1234ABCD" maxLength={25}
+            pattern="#?([a-fA-F0-9]{8}|[a-fA-F0-9]{24})"
+            title="Enter the 8-character order number or full order ID, with or without #."
+          />
+        </label>
+        <label>
+          Order status
+          <select name="status" defaultValue={params.get('status') ?? ''}>
+            <option value="">All statuses</option>
+            {orderStatuses.map((status) => (
+              <option key={status} value={status}>{status[0].toUpperCase() + status.slice(1)}</option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" className="button button-red">Apply filters</button>
+        {filtered && <Link to="/orders" className="text-link">Clear filters</Link>}
+      </form>
       {loading && <Loading label="Loading your orders…" />}
       {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load your orders.')}</PageMessage>}
       {data?.orders.length === 0 && (
-        <PageMessage linkTo={data.page > 1 ? '/orders' : '/products'} linkLabel={data.page > 1 ? 'First page' : 'Browse products'}>
-          {data.page > 1 ? 'There are no orders on this page.' : 'You haven’t placed any orders yet.'}
+        <PageMessage linkTo={filtered ? '/orders' : data.page > 1 ? '/orders' : '/products'} linkLabel={filtered ? 'View all orders' : data.page > 1 ? 'First page' : 'Browse products'}>
+          {filtered ? 'No orders match these filters on this page.' : data.page > 1 ? 'There are no orders on this page.' : 'You haven’t placed any orders yet.'}
         </PageMessage>
       )}
       {data?.orders.length > 0 && (
@@ -40,16 +74,30 @@ export function Orders() {
           ))}
         </ul>
       )}
-      {data && data.total > data.pageSize && data.orders.length > 0 && (
-        <nav className="pagination" aria-label="Order pages">
-          {data.page > 1 && <Link className="button button-outline" to={`/orders?page=${data.page - 1}`}>Previous</Link>}
-          <span>Page {data.page}</span>
-          {data.page < 1000 && data.page * data.pageSize < data.total && (
-            <Link className="button button-outline" to={`/orders?page=${data.page + 1}`}>Next</Link>
-          )}
-        </nav>
-      )}
+      {data && <Pagination data={data} path="/orders" params={params} label="Order pages" />}
     </section>
+  )
+}
+
+function CopyOrderNumber({ orderNumber }) {
+  const [message, setMessage] = useState('')
+
+  async function copyOrderNumber() {
+    try {
+      await navigator.clipboard.writeText(orderNumber)
+      setMessage('Order number copied.')
+    } catch {
+      setMessage('Couldn’t copy the order number. Select and copy it above.')
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <button type="button" className="button button-outline" onClick={copyOrderNumber}>
+        <Copy size={16} aria-hidden="true" /> Copy order number
+      </button>
+      <p className="text-sm text-stone-600" role="status">{message}</p>
+    </div>
   )
 }
 
@@ -175,6 +223,7 @@ function OrderPage({ confirmation = false }) {
         <h1>{cancelled ? 'Order cancelled' : 'Order placed'}</h1>
         <p>Order {orderNumber} · {formatPrice(order.totalAmount)}</p>
         {order.paymentStatus === 'pending' && <p>{cancelled ? 'No payment is due.' : 'Payment is due on delivery.'}</p>}
+        <CopyOrderNumber key={order._id} orderNumber={orderNumber} />
         <div className="mt-4 flex flex-wrap justify-center gap-3">
           <Link className="button button-red" to={`/orders/${order._id}`}>View order details</Link>
           <Link className="button button-outline" to="/products">Continue shopping</Link>
@@ -189,6 +238,7 @@ function OrderPage({ confirmation = false }) {
       <div className="page-heading">
         <h1>Order {orderNumber}</h1>
         <p>{orderDate.format(new Date(order.createdAt))}</p>
+        <CopyOrderNumber key={order._id} orderNumber={orderNumber} />
       </div>
       <div className="mb-5"><BuyAgain key={order._id} orderItems={order.orderItems} /></div>
       <div className="cart-layout">

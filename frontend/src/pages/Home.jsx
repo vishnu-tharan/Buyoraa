@@ -1,6 +1,7 @@
 import { ArrowDownRight, ArrowRight, ShoppingBag } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router'
-import { useApi } from '../api.js'
+import { readRecentProducts, useApi } from '../api.js'
 import { useAuth } from '../AuthContext.jsx'
 import { Loading, PageMessage } from '../components/Feedback.jsx'
 import ProductGrid, { ProductGridSkeleton } from '../components/ProductGrid.jsx'
@@ -46,8 +47,23 @@ function ProductShelf({ title, endpoint, emptyMessage }) {
   )
 }
 
+function RecentProducts({ productIds }) {
+  const { data, loading, error, retry } = useApi(`/products/recent?ids=${productIds.join(',')}`)
+  if (data?.products.length === 0) return null
+
+  return (
+    <section className="home-section" aria-labelledby="recent-products-heading">
+      <div className="section-heading"><h2 id="recent-products-heading">Recently viewed</h2></div>
+      {loading && <ProductGridSkeleton />}
+      {error && <PageMessage error onRetry={retry}>We couldn’t load your recently viewed products.</PageMessage>}
+      {data && <ProductGrid products={data.products} />}
+    </section>
+  )
+}
+
 export default function Home() {
   const { user, loading } = useAuth()
+  const [recentProducts] = useState(readRecentProducts)
 
   return (
     <>
@@ -77,6 +93,7 @@ export default function Home() {
 
       <ProductShelf title="Featured products" endpoint="/products?featured=true" />
       <ProductShelf title="New arrivals" endpoint="/products" emptyMessage="New products will appear here when they’re available." />
+      {recentProducts.length > 0 && <RecentProducts productIds={recentProducts} />}
 
       {!user && !loading && (
         <section className="store-promo">
