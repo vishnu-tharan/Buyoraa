@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useAuth } from './AuthContext.jsx'
+import { api } from './api.js'
 
 const CartContext = createContext(null)
 const storageKey = 'buyora-cart'
@@ -36,6 +37,11 @@ export function CartProvider({ children }) {
   const { user } = useAuth()
   const [items, setItems] = useState(readCart)
   const latestItems = useRef(items)
+  const currentUser = useRef(user)
+
+  useEffect(() => {
+    currentUser.current = user
+  }, [user])
 
   useEffect(() => {
     latestItems.current = items
@@ -86,10 +92,54 @@ export function CartProvider({ children }) {
     setItems(remaining)
   }
 
+  async function buyAgain(orderItems) {
+    const shopperId = user?.id
+    if (!shopperId) throw new Error('Sign in to add items to your cart.')
+
+    const requestedItems = orderItems.map(({ product, quantity }) => ({ productId: product, quantity }))
+    const { data } = await api.post('/cart/quote', { items: requestedItems })
+    if (currentUser.current?.id !== shopperId) throw new Error('Sign in again before adding these items.')
+
+    const remaining = latestItems.current.map((item) => ({ ...item }))
+    const adjustments = []
+    let added = 0
+
+    for (const line of data.lines) {
+      const { product, productId, quantity } = line
+      const name = orderItems.find((item) => item.product === productId)?.name ?? 'Product'
+      if (!product || product.stock === 0) {
+        adjustments.push(`${name} is unavailable.`)
+        continue
+      }
+
+      const current = remaining.find((item) => item.productId === productId)
+      if (!current && remaining.length >= 50) {
+        adjustments.push(`${name} was skipped because your cart holds 50 different products.`)
+        continue
+      }
+
+      const availableQuantity = Math.max(0, Math.min(product.stock, 99) - (current?.quantity ?? 0))
+      const quantityToAdd = Math.min(quantity, availableQuantity)
+      if (quantityToAdd > 0) {
+        if (current) current.quantity += quantityToAdd
+        else remaining.push({ productId, quantity: quantityToAdd })
+        added += quantityToAdd
+      }
+      if (quantityToAdd < quantity) {
+        adjustments.push(`${name}: added ${quantityToAdd} of ${quantity} requested, based on current stock and cart limits.`)
+      }
+    }
+
+    latestItems.current = remaining
+    saveCart(remaining)
+    setItems(remaining)
+    return { added, adjustments }
+  }
+
   const count = items.reduce((total, item) => total + item.quantity, 0)
 
   return (
-    <CartContext.Provider value={{ items, count, addItem, setQuantity, removeItem, removeOrderedItems }}>
+    <CartContext.Provider value={{ items, count, addItem, setQuantity, removeItem, removeOrderedItems, buyAgain }}>
       {children}
     </CartContext.Provider>
   )

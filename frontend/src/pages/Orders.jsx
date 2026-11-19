@@ -1,7 +1,8 @@
 import { CircleCheck } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
+import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage } from '../components/Feedback.jsx'
 import OrderSummary from '../components/OrderSummary.jsx'
 import { formatPrice } from '../components/ProductGrid.jsx'
@@ -49,6 +50,50 @@ export function Orders() {
         </nav>
       )}
     </section>
+  )
+}
+
+function BuyAgain({ orderItems }) {
+  const { buyAgain } = useCart()
+  const [adding, setAdding] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState('')
+  const inFlight = useRef(false)
+
+  async function addOrderItems() {
+    if (inFlight.current) return
+    inFlight.current = true
+    setAdding(true)
+    setError('')
+    try {
+      setResult(await buyAgain(orderItems))
+    } catch (requestError) {
+      setError(errorMessage(requestError, 'We couldn’t add these items. Check that you are signed in and try again.'))
+    } finally {
+      inFlight.current = false
+      setAdding(false)
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <p className="mb-2 text-sm text-stone-600">Add these items to your cart at current prices, subject to availability.</p>
+      <div className="flex flex-wrap gap-3">
+        <button type="button" className="button button-red" onClick={addOrderItems} disabled={adding || Boolean(result)}>
+          {adding ? 'Checking availability…' : 'Buy again'}
+        </button>
+        {result?.added > 0 && <Link className="button button-outline" to="/cart">View cart</Link>}
+      </div>
+      {error && <p className="form-error mt-3" role="alert">{error}</p>}
+      {result && (
+        <div className="mt-3 text-sm" role="status">
+          <p>{result.added > 0 ? `Added ${result.added} ${result.added === 1 ? 'item' : 'items'} to your cart.` : 'No items were added.'}</p>
+          {result.adjustments.length > 0 && <ul className="mt-2 list-disc pl-5">
+            {result.adjustments.map((message, index) => <li key={index}>{message}</li>)}
+          </ul>}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -145,6 +190,7 @@ function OrderPage({ confirmation = false }) {
         <h1>Order {orderNumber}</h1>
         <p>{orderDate.format(new Date(order.createdAt))}</p>
       </div>
+      <div className="mb-5"><BuyAgain key={order._id} orderItems={order.orderItems} /></div>
       <div className="cart-layout">
         <div className="checkout-panel">
           <h2>Order status</h2>
