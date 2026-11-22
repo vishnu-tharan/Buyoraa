@@ -2,7 +2,7 @@ import { Router } from 'express'
 import mongoose from 'mongoose'
 import { adminOverview, adminUsers } from '../controllers/adminController.js'
 import {
-  adminProduct, adminProducts, adminStockHistory, deleteCategory, deleteProduct, saveCategory, saveProduct,
+  adminProduct, adminProducts, adminStockHistory, deleteCategory, deleteProduct, restoreProduct, saveCategory, saveProduct,
 } from '../controllers/adminCatalogController.js'
 import { adminOrder, adminOrders, updateOrderStatus } from '../controllers/adminOrdersController.js'
 import { requireAdmin, requireUser } from '../middleware/auth.js'
@@ -22,6 +22,7 @@ router.get('/products/:id', adminProduct)
 router.get('/products/:id/stock-history', adminStockHistory)
 router.post('/products', saveProduct)
 router.put('/products/:id', saveProduct)
+router.patch('/products/:id/restore', restoreProduct)
 router.delete('/products/:id', deleteProduct)
 router.post('/categories', saveCategory)
 router.put('/categories/:id', saveCategory)

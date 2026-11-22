@@ -37,7 +37,7 @@ MongoDB stores product and order amounts as integer cents. The browser displays 
 
 ## Run locally on Windows
 
-You need Node.js 22.12 or newer, npm, and either a transaction-capable MongoDB Atlas cluster or a local MongoDB replica set. Use the replica set or Atlas for checkout and transaction-based admin updates.
+You need Node.js 22.12 or newer, npm, and either a transaction-capable MongoDB Atlas cluster or a local MongoDB replica set. Checkout, password changes, and several admin updates use transactions.
 
 ### 1. Install the packages
 
@@ -99,7 +99,9 @@ Open [Buyora](http://127.0.0.1:5173). The API health check is at [port 5000](htt
 2. Connect MongoDB Compass to the same database as the app. In the `users` collection, find the account by its exact email and set its `role` to `admin`.
 3. Sign in with that account and open **My account → Admin area**.
 
-Add categories before products. Enter product prices in rupees and add one image URL per line. A category can be deleted once its active products have been moved or removed. Removing a product hides it from the store while preserving past orders and inventory records. Reload a product before saving if its stock changed during an edit.
+Add categories before products. Enter product prices in rupees and add one image URL per line. A category can be deleted once its active products have been moved or archived. Reload a product before saving if its stock changed during an edit.
+
+In **Admin → Products**, choose **Archive** to hide a product from the store. Open **Archived**, select **Restore**, and confirm with **Restore product**. The original category is selected if it still exists. If it was deleted, choose a replacement category. Restoring keeps the product’s stock, past orders, and stock history.
 
 Orders move from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. Cancelling a pending or confirmed order restores stock. Marking an order delivered records its Cash on Delivery payment as paid.
 
@@ -107,7 +109,7 @@ If a shipped order is refused or cannot be delivered, mark it **Delivery failed*
 
 In **Admin → Orders**, search by order number, customer or recipient name, or phone number. Combine the search with status and date filters. Both dates are inclusive and use Sri Lanka time. Open an order to print a packing slip with its delivery address, instructions, items, and quantities.
 
-Open a product for editing to see **Stock history**. It records changes from product creation, manual stock edits, orders, cancellations, and restocked returns.
+Open a product from the **Active** or **Archived** view to see **Stock history**. It records changes from product creation, manual stock edits, orders, cancellations, and restocked returns.
 
 ## Verify the app
 
@@ -117,6 +119,7 @@ Open a product for editing to see **Stock history**. It records changes from pro
 | Account | Register, sign out and back in, and add, edit, or remove a delivery address. In **My account → Change password**, verify that the current device stays signed in and other sessions end. |
 | Cart and wishlist | Change quantities and reload the cart. Switch accounts in the same browser and verify that each account sees its own cart. Save a product to the wishlist and move it to the cart. Check that unavailable stock is flagged. |
 | Checkout | Use a saved address, add optional delivery instructions, place a Cash on Delivery order, and verify that the order and instructions appear in **My orders**. |
+| Admin products | Archive a product and verify it disappears from the storefront. Restore it from **Archived** and check that stock and history are preserved. Try restoring a product whose original category was deleted. |
 | Admin | Search and filter orders, print a packing slip, and check stock history after a cancellation or restocked return. Verify that marking delivery failed leaves stock reserved. Try the admin URL using a customer account. |
 | Build | From the project root, run `npm.cmd run build --prefix frontend`. With the development API running and Vite stopped, use `npm.cmd run preview --prefix frontend`. |
 
@@ -172,12 +175,6 @@ On **your own server**, run the built app as a Node service behind an HTTPS reve
 
 After deployment, test the homepage, a refreshed product URL, sign-in, and `/api/health` at the host's public HTTPS address.
 
-## Commit the final phase
-
-```powershell
-git add -- backend frontend README.md
-git diff --cached --stat
-git commit -m "Finish Buyora setup and testing"
-```
+## Credits
 
 The hero photo is by Iuliia Pilipeichenko. Sample product photos are served by Unsplash. [Hero photo](https://unsplash.com/photos/hand-holding-colorful-shopping-bags-against-a-light-wall-6ZgtlGd4RQE) [Unsplash License](https://unsplash.com/license)

@@ -44,14 +44,17 @@ function categoryFields(input = {}) {
 }
 
 export async function adminProducts(request, response) {
-  const { page: requestedPage, lowStock } = request.query
+  const { page: requestedPage, lowStock, archived } = request.query
   const page = readPage(requestedPage)
   if (!page) return response.status(400).json({ message: 'Enter a valid page number.' })
   if (lowStock !== undefined && lowStock !== 'true' && lowStock !== 'false') {
     return response.status(400).json({ message: 'Low stock must be true or false.' })
   }
+  if (archived !== undefined && archived !== 'true' && archived !== 'false') {
+    return response.status(400).json({ message: 'Archived must be true or false.' })
+  }
 
-  const filters = { ...activeProducts }
+  const filters = archived === 'true' ? { archived: true } : { ...activeProducts }
   if (lowStock === 'true') filters.stock = { $gte: 1, $lte: 5 }
 
   const pageSize = 20
@@ -69,7 +72,7 @@ export async function adminProducts(request, response) {
 }
 
 export async function adminProduct(request, response) {
-  const product = await Product.findOne({ _id: request.params.id, ...activeProducts }).lean()
+  const product = await Product.findById(request.params.id).lean()
   if (!product) return response.status(404).json({ message: 'Product not found.' })
   response.json({ product })
 }
@@ -154,6 +157,38 @@ export async function deleteProduct(request, response) {
   )
   if (!result.matchedCount) return response.status(404).json({ message: 'Product not found.' })
   response.sendStatus(204)
+}
+
+export async function restoreProduct(request, response) {
+  const { id } = request.params
+  const { category, version } = request.body ?? {}
+  if (typeof category !== 'string' || !mongoose.isObjectIdOrHexString(category)
+    || !Number.isSafeInteger(version) || version < 0) {
+    return response.status(400).json({ message: 'Choose a category and reload the product if needed.' })
+  }
+
+  const result = await mongoose.connection.transaction(async (session) => {
+    const product = await Product.findById(id).select('archived category __v').session(session).lean()
+    if (!product) return { status: 404, message: 'Product not found.' }
+
+    const currentVersion = product.__v ?? 0
+    if (product.archived !== true) {
+      if (currentVersion === version + 1 && product.category?.equals(category)) return { status: 204 }
+      return { status: 409, message: 'This product is already active. Reload to see its current details.' }
+    }
+    if (currentVersion !== version) {
+      return { status: 409, message: 'This product has changed. Reload it before restoring.' }
+    }
+    if (!(await lockCategory(category, session))) {
+      return { status: 409, message: 'This category no longer exists. Reload and choose an available category.' }
+    }
+
+    await Product.updateOne({ _id: id }, { $set: { archived: false, category }, $inc: { __v: 1 } }, { session })
+    return { status: 204 }
+  })
+
+  if (result.message) return response.status(result.status).json({ message: result.message })
+  response.sendStatus(result.status)
 }
 
 export async function saveCategory(request, response) {

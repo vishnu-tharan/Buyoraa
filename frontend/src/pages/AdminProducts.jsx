@@ -19,6 +19,7 @@ export function AdminProducts() {
   const [params, setParams] = useSearchParams()
   const { state } = useLocation()
   const { data, error, loading, retry } = useApi(`/admin/products?${params}`)
+  const archived = params.get('archived') === 'true'
   const lowStock = params.get('lowStock') === 'true'
   const [removing, setRemoving] = useState(false)
   const [notice, setNotice] = useState(null)
@@ -32,17 +33,17 @@ export function AdminProducts() {
     setParams(nextParams)
   }
 
-  async function removeProduct(product) {
-    if (!window.confirm(`Remove "${product.name}" from the store?`)) return
+  async function archiveProduct(product) {
+    if (!window.confirm(`Archive "${product.name}" and hide it from the store?`)) return
     setRemoving(true)
     setNotice(null)
 
     try {
       await api.delete(`/admin/products/${product._id}`)
-      setNotice({ message: 'Product removed from the store.' })
+      setNotice({ message: 'Product archived. You can restore it from the Archived view.' })
       retry()
     } catch (requestError) {
-      setNotice({ error: true, message: errorMessage(requestError, 'We couldn’t remove the product.') })
+      setNotice({ error: true, message: errorMessage(requestError, 'We couldn’t archive the product.') })
     } finally {
       setRemoving(false)
     }
@@ -54,6 +55,10 @@ export function AdminProducts() {
         <h1>Products</h1>
         <Link to="/admin/products/new" className="button button-red">Add product</Link>
       </div>
+      <nav className="mb-4 flex flex-wrap gap-3" aria-label="Product views">
+        <Link className={`button ${archived ? 'button-outline' : 'button-red'}`} to="/admin/products" aria-current={archived ? undefined : 'page'}>Active</Link>
+        <Link className={`button ${archived ? 'button-red' : 'button-outline'}`} to="/admin/products?archived=true" aria-current={archived ? 'page' : undefined}>Archived</Link>
+      </nav>
       <label className="mb-4 inline-flex items-center gap-2 text-sm font-semibold">
         <input type="checkbox" checked={lowStock} onChange={changeStockFilter} className="size-4 accent-brand-red" />
         Low stock only (1–5 units)
@@ -64,7 +69,7 @@ export function AdminProducts() {
       {loading && <Loading label="Loading products…" />}
       {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load products.')}</PageMessage>}
       {data?.products.length === 0 && (
-        <PageMessage>{lowStock ? 'No low-stock products on this page.' : 'No active products on this page.'}</PageMessage>
+        <PageMessage>{lowStock ? 'No low-stock products on this page.' : `No ${archived ? 'archived' : 'active'} products on this page.`}</PageMessage>
       )}
       {data?.products.length > 0 && (
         <div className="admin-table">
@@ -79,14 +84,18 @@ export function AdminProducts() {
                     <ProductImage source={product.images?.[0]} alt="" />
                     <div>{product.name}{product.featured && <p className="text-sm text-stone-600">Featured</p>}</div>
                   </div></td>
-                  <td>{product.category?.name ?? 'No category'}</td>
+                  <td>{product.category?.name ?? 'Category unavailable'}</td>
                   <td>{formatPrice(product.price)}</td>
                   <td>{product.stock}</td>
                   <td><div className="admin-actions">
-                    <Link to={`/admin/products/${product._id}`} className="text-link" aria-label={`Edit ${product.name}`}>Edit</Link>
-                    <button type="button" className="text-link" aria-label={`Remove ${product.name}`} disabled={removing} onClick={() => removeProduct(product)}>
-                      Remove
-                    </button>
+                    <Link to={`/admin/products/${product._id}`} className="text-link" aria-label={`${archived ? 'Restore' : 'Edit'} ${product.name}`}>
+                      {archived ? 'Restore' : 'Edit'}
+                    </Link>
+                    {!archived && (
+                      <button type="button" className="text-link" aria-label={`Archive ${product.name}`} disabled={removing} onClick={() => archiveProduct(product)}>
+                        Archive
+                      </button>
+                    )}
                   </div></td>
                 </tr>
               ))}
@@ -200,7 +209,57 @@ function ProductEditor({ product, categories, reloadProduct }) {
   )
 }
 
-function EditProduct({ id, categories }) {
+function RestoreProduct({ product, categories, reload }) {
+  const navigate = useNavigate()
+  const [saving, setSaving] = useState(false)
+  const [failure, setFailure] = useState(null)
+  const originalCategory = categories.find(({ _id }) => _id === product.category)
+
+  async function restore(event) {
+    event.preventDefault()
+    const category = new FormData(event.currentTarget).get('category')
+    setSaving(true)
+    setFailure(null)
+
+    try {
+      await api.patch(`/admin/products/${product._id}/restore`, { category, version: product.__v ?? 0 })
+      navigate('/admin/products', { state: { message: `“${product.name}” is back in the store.` } })
+    } catch (error) {
+      setFailure({ stale: error.response?.status === 409, message: errorMessage(error, 'We couldn’t restore the product.') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={restore} className="checkout-panel admin-form">
+      <div>
+        <h2>{product.name}</h2>
+        <p>Current stock: {product.stock}</p>
+      </div>
+      {categories.length ? (
+        <label className="grid gap-2 font-semibold">
+          Category
+          <select name="category" defaultValue={originalCategory?._id ?? ''} disabled={saving} required>
+            <option value="" disabled>Choose a category</option>
+            {categories.map(({ _id, name }) => <option key={_id} value={_id}>{name}</option>)}
+          </select>
+          {!originalCategory && <span className="field-hint">The original category is unavailable. Choose a category to restore this product.</span>}
+        </label>
+      ) : <p>Create a category before restoring this product.</p>}
+      {failure && <p className="form-error" role="alert">{failure.message}</p>}
+      <div className="flex flex-wrap gap-3">
+        {categories.length ? (
+          <button type="submit" className="button button-red" disabled={saving || failure?.stale}>{saving ? 'Restoring…' : 'Restore product'}</button>
+        ) : <Link to="/admin/categories" className="button button-red">Add a category</Link>}
+        {failure?.stale && <button type="button" className="button button-outline" onClick={reload}>Reload product</button>}
+        <Link to="/admin/products?archived=true" className="button button-outline">Back to archived products</Link>
+      </div>
+    </form>
+  )
+}
+
+function EditProduct({ id, categories, reloadCategories }) {
   const { data, error, loading, retry } = useApi(`/admin/products/${encodeURIComponent(id)}`)
 
   if (loading) return <Loading label="Loading product…" />
@@ -208,7 +267,10 @@ function EditProduct({ id, categories }) {
 
   return (
     <>
-      <ProductEditor key={id} product={data.product} categories={categories} reloadProduct={retry} />
+      <div className="page-heading"><h1>{data.product.archived ? 'Restore product' : 'Edit product'}</h1></div>
+      {data.product.archived
+        ? <RestoreProduct key={id} product={data.product} categories={categories} reload={reloadCategories} />
+        : <ProductEditor key={id} product={data.product} categories={categories} reloadProduct={retry} />}
       <StockHistory id={id} />
     </>
   )
@@ -260,11 +322,11 @@ export function AdminProductForm() {
 
   return (
     <section>
-      <div className="page-heading"><h1>{id ? 'Edit product' : 'Add product'}</h1></div>
+      {!id && <div className="page-heading"><h1>Add product</h1></div>}
       {loading && <Loading label="Loading categories…" />}
       {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load categories.')}</PageMessage>}
       {data && (id
-        ? <EditProduct key={id} id={id} categories={data.categories} />
+        ? <EditProduct key={id} id={id} categories={data.categories} reloadCategories={retry} />
         : <ProductEditor categories={data.categories} />)}
     </section>
   )

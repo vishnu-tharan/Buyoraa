@@ -30,6 +30,7 @@ const productSchema = new mongoose.Schema(
 )
 
 productSchema.index({ createdAt: -1, _id: -1 })
+productSchema.index({ archived: 1, createdAt: -1, _id: -1 })
 productSchema.index({ category: 1, createdAt: -1, _id: -1 })
 
 const stockChangeSchema = new mongoose.Schema({
