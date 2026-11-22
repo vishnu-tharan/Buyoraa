@@ -76,18 +76,21 @@ export async function adminOrders(request, response) {
 }
 
 export async function adminOrder(request, response) {
-  const order = await Order.findById(request.params.id).populate('user', 'name email').lean()
+  const order = await Order.findById(request.params.id).select('+returnRestocked').populate('user', 'name email').lean()
   if (!order) return response.status(404).json({ message: 'Order not found.' })
   response.json({ order, allowedStatuses: nextStatuses[order.orderStatus] })
 }
 
 export async function updateOrderStatus(request, response) {
-  const status = request.body?.status
+  const { status, restock } = request.body ?? {}
   if (!orderStatuses.includes(status)) {
     return response.status(400).json({ message: 'Choose a valid order status.' })
   }
+  if (status === 'returned' && typeof restock !== 'boolean') {
+    return response.status(400).json({ message: 'Choose whether to restock the returned items.' })
+  }
 
-  const result = await changeOrderStatus({ orderId: request.params.id, status })
+  const result = await changeOrderStatus({ orderId: request.params.id, status, restock })
   if (result.message) return response.status(result.httpStatus).json({ message: result.message })
   response.sendStatus(result.httpStatus)
 }

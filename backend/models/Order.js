@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 import { addressFields } from './User.js'
 
-export const orderStatuses = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']
+export const orderStatuses = ['pending', 'confirmed', 'shipped', 'delivered', 'delivery_failed', 'returned', 'cancelled']
 
 const orderItemSchema = new mongoose.Schema(
   {
@@ -41,6 +41,7 @@ const orderSchema = new mongoose.Schema(
     checkoutFingerprint: { type: String, immutable: true, select: false },
     paymentMethod: { type: String, enum: ['cash_on_delivery'], default: 'cash_on_delivery' },
     paymentStatus: { type: String, enum: ['pending', 'paid'], default: 'pending' },
+    returnRestocked: { type: Boolean, select: false },
     orderStatus: {
       type: String,
       enum: orderStatuses,

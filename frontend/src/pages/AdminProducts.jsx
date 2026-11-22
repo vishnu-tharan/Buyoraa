@@ -12,6 +12,7 @@ const stockReasons = {
   manual: 'Manual edit',
   order: 'Order placed',
   cancellation: 'Order cancelled',
+  return: 'Order returned',
 }
 
 export function AdminProducts() {

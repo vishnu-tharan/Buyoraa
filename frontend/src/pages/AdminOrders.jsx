@@ -2,18 +2,13 @@ import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
 import { Loading, PageMessage, Pagination } from '../components/Feedback.jsx'
-import OrderSummary from '../components/OrderSummary.jsx'
+import OrderSummary, { orderPaymentLabel, orderStatusLabels } from '../components/OrderSummary.jsx'
 import { formatPrice } from '../components/ProductGrid.jsx'
 
 const dateFormat = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium', timeZone: 'Asia/Colombo' })
-const statuses = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']
 
 function orderNumber(id) {
   return `#${id.slice(-8).toUpperCase()}`
-}
-
-function statusLabel(status) {
-  return status[0].toUpperCase() + status.slice(1)
 }
 
 export function AdminOrdersTable({ orders }) {
@@ -33,7 +28,7 @@ export function AdminOrdersTable({ orders }) {
               <td><Link className="text-link" to={`/admin/orders/${order._id}`}>{orderNumber(order._id)}</Link></td>
               <td>{order.user?.name ?? 'Customer unavailable'}</td>
               <td>{dateFormat.format(new Date(order.createdAt))}</td>
-              <td><span className="stock-status my-0 capitalize">{order.orderStatus}</span></td>
+              <td><span className="stock-status my-0">{orderStatusLabels[order.orderStatus]}</span></td>
               <td>{formatPrice(order.totalAmount)}</td>
             </tr>
           ))}
@@ -72,7 +67,7 @@ export function AdminOrders() {
           Order status
           <select name="status" defaultValue={status}>
             <option value="">All statuses</option>
-            {statuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}
+            {Object.entries(orderStatusLabels).map(([status, label]) => <option key={status} value={status}>{label}</option>)}
           </select>
         </label>
         <label>From date<input name="from" type="date" defaultValue={from} /></label>
@@ -130,6 +125,37 @@ function PackingSlip({ order }) {
   )
 }
 
+function OrderStatusForm({ allowedStatuses, saving, onSubmit }) {
+  const [selectedStatus, setSelectedStatus] = useState('')
+
+  return (
+    <form className="admin-status-form" onSubmit={onSubmit}>
+      <label>
+        Update order status
+        <select name="status" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value)} disabled={saving} required>
+          <option value="" disabled>Choose a status</option>
+          {allowedStatuses.map((status) => <option key={status} value={status}>{orderStatusLabels[status]}</option>)}
+        </select>
+      </label>
+      {selectedStatus === 'delivery_failed' && <p className="field-hint">Stock stays reserved until the items are received back and the return is recorded.</p>}
+      {selectedStatus === 'returned' && (
+        <label>
+          Returned items
+          <select name="restock" defaultValue="" disabled={saving} required>
+            <option value="" disabled>Choose what to do with stock</option>
+            <option value="yes">Restock all items</option>
+            <option value="no">Record return without restocking</option>
+          </select>
+          <span className="field-hint">Record the return after receiving all items. Restock only if all items can be sold again.</span>
+        </label>
+      )}
+      <button className="button button-red" disabled={saving} type="submit">
+        {saving ? 'Saving…' : 'Save status'}
+      </button>
+    </form>
+  )
+}
+
 export function AdminOrderDetails() {
   const { id } = useParams()
   const { data, error, loading, retry } = useApi(`/admin/orders/${encodeURIComponent(id)}`)
@@ -138,13 +164,15 @@ export function AdminOrderDetails() {
 
   async function saveStatus(event) {
     event.preventDefault()
-    const status = new FormData(event.currentTarget).get('status')
+    const form = new FormData(event.currentTarget)
+    const status = form.get('status')
+    const restock = status === 'returned' ? form.get('restock') === 'yes' : undefined
     setSaving(true)
     setNotice(null)
 
     try {
-      await api.patch(`/admin/orders/${id}/status`, { status })
-      setNotice({ message: `Order marked ${status}.` })
+      await api.patch(`/admin/orders/${id}/status`, { status, restock })
+      setNotice({ message: `Order status updated to ${orderStatusLabels[status]}.` })
       retry()
     } catch (requestError) {
       setNotice({ error: true, message: errorMessage(requestError, 'We couldn’t update the order.') })
@@ -159,6 +187,7 @@ export function AdminOrderDetails() {
 
   const { order, allowedStatuses = [] } = data
   const address = order.shippingAddress
+  const canPrint = !['cancelled', 'delivery_failed', 'returned'].includes(order.orderStatus)
 
   return (
     <section className="admin-order-details">
@@ -166,9 +195,9 @@ export function AdminOrderDetails() {
       <div className="page-heading admin-page-heading">
         <div>
           <h1>Order {orderNumber(order._id)}</h1>
-          <p>{dateFormat.format(new Date(order.createdAt))} · {statusLabel(order.orderStatus)}</p>
+          <p>{dateFormat.format(new Date(order.createdAt))} · {orderStatusLabels[order.orderStatus]}</p>
         </div>
-        {order.orderStatus !== 'cancelled' && (
+        {canPrint && (
           <button className="button button-outline" type="button" onClick={() => window.print()}>Print packing slip</button>
         )}
       </div>
@@ -191,24 +220,16 @@ export function AdminOrderDetails() {
           </ul>
         </div>
         <OrderSummary amounts={order}>
-          <p>Cash on Delivery · Payment {order.paymentStatus}</p>
+          <p>Cash on Delivery · {orderPaymentLabel(order)}</p>
+          {order.orderStatus === 'returned' && (
+            <p>{order.returnRestocked ? 'Returned items were added back to stock.' : 'Stock was unchanged when the return was recorded.'}</p>
+          )}
           {allowedStatuses.length > 0 && (
-            <form className="admin-status-form" key={order.orderStatus} onSubmit={saveStatus}>
-              <label>
-                Update order status
-                <select name="status" defaultValue="" disabled={saving} required>
-                  <option value="" disabled>Choose a status</option>
-                  {allowedStatuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}
-                </select>
-              </label>
-              <button className="button button-red" disabled={saving} type="submit">
-                {saving ? 'Saving…' : 'Save status'}
-              </button>
-            </form>
+            <OrderStatusForm key={`${id}-${order.orderStatus}`} allowedStatuses={allowedStatuses} saving={saving} onSubmit={saveStatus} />
           )}
         </OrderSummary>
       </div>
-      {order.orderStatus !== 'cancelled' && <PackingSlip order={order} />}
+      {canPrint && <PackingSlip order={order} />}
     </section>
   )
 }

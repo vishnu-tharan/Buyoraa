@@ -1,5 +1,21 @@
 import { formatPrice } from './ProductGrid.jsx'
 
+export const orderStatusLabels = {
+  pending: 'Pending',
+  confirmed: 'Confirmed',
+  shipped: 'Shipped',
+  delivered: 'Delivered',
+  delivery_failed: 'Delivery failed',
+  returned: 'Returned',
+  cancelled: 'Cancelled',
+}
+
+export function orderPaymentLabel({ orderStatus, paymentStatus }) {
+  if (paymentStatus === 'paid') return 'Payment paid'
+  if (['cancelled', 'delivery_failed', 'returned'].includes(orderStatus)) return 'No payment due'
+  return 'Payment pending'
+}
+
 export default function OrderSummary({ amounts, loading = false, estimated = false, children }) {
   return (
     <aside className="cart-summary">

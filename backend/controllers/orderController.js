@@ -22,20 +22,29 @@ class CheckoutLimitError extends Error {
 export const nextStatuses = {
   pending: ['confirmed', 'cancelled'],
   confirmed: ['shipped', 'cancelled'],
-  shipped: ['delivered'],
-  delivered: [],
+  shipped: ['delivered', 'delivery_failed'],
+  delivered: ['returned'],
+  delivery_failed: ['returned'],
+  returned: [],
   cancelled: [],
 }
 
-export async function changeOrderStatus({ orderId, status, customerId }) {
+export async function changeOrderStatus({ orderId, status, customerId, restock }) {
   const filter = { _id: orderId }
   if (customerId) filter.user = customerId
+  const returning = status === 'returned'
+  const stockReason = returning ? 'return' : 'cancellation'
 
   try {
     return await mongoose.connection.transaction(async (session) => {
-      const order = await Order.findOne(filter).session(session)
+      const order = await Order.findOne(filter).select('+returnRestocked').session(session)
       if (!order) return { httpStatus: 404, message: 'Order not found.' }
-      if (order.orderStatus === status) return { httpStatus: 204 }
+      if (order.orderStatus === status) {
+        if (returning && order.returnRestocked !== restock) {
+          return { httpStatus: 409, message: 'This return has already been recorded. Check the stock decision on the order.' }
+        }
+        return { httpStatus: 204 }
+      }
 
       if (customerId && (order.orderStatus !== 'pending' || order.paymentStatus !== 'pending')) {
         return { httpStatus: 409, message: 'You can only cancel an unpaid order while it is pending.' }
@@ -46,9 +55,10 @@ export async function changeOrderStatus({ orderId, status, customerId }) {
 
       order.orderStatus = status
       if (status === 'delivered') order.paymentStatus = 'paid'
+      if (returning) order.returnRestocked = restock
       await order.save({ session })
 
-      if (status === 'cancelled') {
+      if (status === 'cancelled' || (returning && restock)) {
         const changes = []
         for (const { product, quantity } of order.orderItems) {
           const restored = await Product.findOneAndUpdate(
@@ -57,7 +67,7 @@ export async function changeOrderStatus({ orderId, status, customerId }) {
             { session, returnDocument: 'after' },
           ).select('stock').lean()
           if (!restored) throw restockFailed
-          changes.push({ product, order: order._id, reason: 'cancellation', quantityChange: quantity, stockAfter: restored.stock })
+          changes.push({ product, order: order._id, reason: stockReason, quantityChange: quantity, stockAfter: restored.stock })
         }
         await StockChange.insertMany(changes, { session })
       }
@@ -66,7 +76,7 @@ export async function changeOrderStatus({ orderId, status, customerId }) {
     })
   } catch (error) {
     if (error !== restockFailed) throw error
-    return { httpStatus: 409, message: 'The order could not be cancelled because stock could not be restored.' }
+    return { httpStatus: 409, message: `The ${stockReason} could not be saved because stock could not be restored.` }
   }
 }
 

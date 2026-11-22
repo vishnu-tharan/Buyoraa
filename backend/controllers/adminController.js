@@ -9,7 +9,7 @@ export async function adminOverview(request, response) {
     User.countDocuments({ role: 'customer' }),
     Order.countDocuments(),
     Order.aggregate([
-      { $match: { orderStatus: 'delivered', paymentStatus: 'paid' } },
+      { $match: { orderStatus: { $in: ['delivered', 'returned'] }, paymentStatus: 'paid' } },
       { $group: { _id: null, revenue: { $sum: '$totalAmount' } } },
     ]),
     Order.find()

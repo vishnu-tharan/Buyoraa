@@ -101,11 +101,13 @@ Open [Buyora](http://127.0.0.1:5173). The API health check is at [port 5000](htt
 
 Add categories before products. Enter product prices in rupees and add one image URL per line. A category can be deleted once its active products have been moved or removed. Removing a product hides it from the store while preserving past orders and inventory records. Reload a product before saving if its stock changed during an edit.
 
-Orders move from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. Cancelling a pending or confirmed order restores stock. Marking an order delivered records its Cash on Delivery payment as paid. The dashboard's collected sales total includes delivery charges on delivered and paid orders.
+Orders move from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. Cancelling a pending or confirmed order restores stock. Marking an order delivered records its Cash on Delivery payment as paid.
+
+If a shipped order is refused or cannot be delivered, mark it **Delivery failed**. Stock stays reserved until the items return. Once all items are received back from a failed delivery or a delivered order, mark it **Returned** and choose whether to restock them. Restock only if every item can be sold again. Recording a return leaves the payment record and collected sales total intact. Handle any refund separately.
 
 In **Admin → Orders**, search by order number, customer or recipient name, or phone number. Combine the search with status and date filters. Both dates are inclusive and use Sri Lanka time. Open an order to print a packing slip with its delivery address, instructions, items, and quantities.
 
-Open a product for editing to see **Stock history**. It records changes from product creation, manual stock edits, orders, and cancellations after this feature is deployed.
+Open a product for editing to see **Stock history**. It records changes from product creation, manual stock edits, orders, cancellations, and restocked returns.
 
 ## Verify the app
 
@@ -115,7 +117,7 @@ Open a product for editing to see **Stock history**. It records changes from pro
 | Account | Register, sign out and back in, reload the account page, and add, edit, or remove a delivery address. Signing out ends the current session. |
 | Cart and wishlist | Change quantities and reload the cart. Switch accounts in the same browser and verify that each account sees its own cart. Save a product to the wishlist and move it to the cart. Check that unavailable stock is flagged. |
 | Checkout | Use a saved address, add optional delivery instructions, place a Cash on Delivery order, and verify that the order and instructions appear in **My orders**. |
-| Admin | Search and filter orders, print a packing slip, and check the history after editing stock and cancelling an order. Try the admin URL using a customer account. |
+| Admin | Search and filter orders, print a packing slip, and check stock history after a cancellation or restocked return. Verify that marking delivery failed leaves stock reserved. Try the admin URL using a customer account. |
 | Build | From the project root, run `npm.cmd run build --prefix frontend`. With the development API running and Vite stopped, use `npm.cmd run preview --prefix frontend`. |
 
 ### Postman

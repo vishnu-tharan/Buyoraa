@@ -4,11 +4,10 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
 import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage, Pagination } from '../components/Feedback.jsx'
-import OrderSummary from '../components/OrderSummary.jsx'
+import OrderSummary, { orderPaymentLabel, orderStatusLabels } from '../components/OrderSummary.jsx'
 import { formatPrice } from '../components/ProductGrid.jsx'
 
 const orderDate = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium' })
-const orderStatuses = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']
 
 export function Orders() {
   const [params, setParams] = useSearchParams()
@@ -43,8 +42,8 @@ export function Orders() {
           Order status
           <select name="status" defaultValue={params.get('status') ?? ''}>
             <option value="">All statuses</option>
-            {orderStatuses.map((status) => (
-              <option key={status} value={status}>{status[0].toUpperCase() + status.slice(1)}</option>
+            {Object.entries(orderStatusLabels).map(([status, label]) => (
+              <option key={status} value={status}>{label}</option>
             ))}
           </select>
         </label>
@@ -67,7 +66,7 @@ export function Orders() {
                   <h2>Order #{order._id.slice(-8).toUpperCase()}</h2>
                   <p className="text-sm text-stone-600">{orderDate.format(new Date(order.createdAt))}</p>
                 </div>
-                <span className="stock-status capitalize">{order.orderStatus}</span>
+                <span className="stock-status">{orderStatusLabels[order.orderStatus]}</span>
                 <span className="font-bold">{formatPrice(order.totalAmount)}</span>
               </Link>
             </li>
@@ -208,6 +207,7 @@ function OrderPage({ confirmation = false }) {
   const orderNumber = `#${order._id.slice(-8).toUpperCase()}`
   const address = order.shippingAddress
   const cancelled = order.orderStatus === 'cancelled'
+  const paymentLabel = orderPaymentLabel(order)
   const canCancel = order.orderStatus === 'pending' && order.paymentStatus === 'pending'
   const cancellationNotice = cancellation?.id === id ? cancellation : null
   const cancellationError = cancellationNotice?.error && !cancelled
@@ -218,12 +218,16 @@ function OrderPage({ confirmation = false }) {
   }
 
   if (confirmation) {
+    const title = {
+      cancelled: 'Order cancelled', delivery_failed: 'Delivery failed', returned: 'Order returned',
+    }[order.orderStatus] ?? 'Order placed'
+
     return (
       <section className="page-message order-confirmation">
-        <CircleCheck size={44} className="mx-auto mb-3 text-brand-red" aria-hidden="true" />
-        <h1>{cancelled ? 'Order cancelled' : 'Order placed'}</h1>
+        {title === 'Order placed' && <CircleCheck size={44} className="mx-auto mb-3 text-brand-red" aria-hidden="true" />}
+        <h1>{title}</h1>
         <p>Order {orderNumber} · {formatPrice(order.totalAmount)}</p>
-        {order.paymentStatus === 'pending' && <p>{cancelled ? 'No payment is due.' : 'Payment is due on delivery.'}</p>}
+        {order.paymentStatus === 'pending' && <p>{paymentLabel === 'No payment due' ? 'No payment is due.' : 'Payment is due on delivery.'}</p>}
         <CopyOrderNumber key={order._id} orderNumber={orderNumber} />
         <div className="mt-4 flex flex-wrap justify-center gap-3">
           <Link className="button button-red" to={`/orders/${order._id}`}>View order details</Link>
@@ -245,7 +249,7 @@ function OrderPage({ confirmation = false }) {
       <div className="cart-layout">
         <div className="checkout-panel">
           <h2>Order status</h2>
-          <span className="stock-status capitalize my-0 w-fit">{order.orderStatus}</span>
+          <span className="stock-status my-0 w-fit">{orderStatusLabels[order.orderStatus]}</span>
           {cancellationNotice && (
             <p className={cancellationError ? 'form-error' : 'text-sm'} role={cancellationError ? 'alert' : 'status'}>
               {cancelled ? 'Your order was cancelled.' : cancellationNotice.message}
@@ -277,7 +281,7 @@ function OrderPage({ confirmation = false }) {
           )}
         </div>
         <OrderSummary amounts={order}>
-          <p>Cash on Delivery · {cancelled && order.paymentStatus === 'pending' ? 'No payment due' : `Payment ${order.paymentStatus}`}</p>
+          <p>Cash on Delivery · {paymentLabel}</p>
         </OrderSummary>
       </div>
     </section>
