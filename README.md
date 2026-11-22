@@ -114,7 +114,7 @@ Open a product for editing to see **Stock history**. It records changes from pro
 | Area | What to check |
 | --- | --- |
 | Catalog | Search by name, combine category and price filters, sort prices, and open a product. Test a search that returns no results. |
-| Account | Register, sign out and back in, reload the account page, and add, edit, or remove a delivery address. Signing out ends the current session. |
+| Account | Register, sign out and back in, and add, edit, or remove a delivery address. In **My account → Change password**, verify that the current device stays signed in and other sessions end. |
 | Cart and wishlist | Change quantities and reload the cart. Switch accounts in the same browser and verify that each account sees its own cart. Save a product to the wishlist and move it to the cart. Check that unavailable stock is flagged. |
 | Checkout | Use a saved address, add optional delivery instructions, place a Cash on Delivery order, and verify that the order and instructions appear in **My orders**. |
 | Admin | Search and filter orders, print a packing slip, and check stock history after a cancellation or restocked return. Verify that marking delivery failed leaves stock reserved. Try the admin URL using a customer account. |

@@ -1,21 +1,20 @@
-import mongoose from 'mongoose'
 import User from '../models/User.js'
-import { getSessionUserId } from '../utils/session.js'
+import { getActiveSession } from '../utils/session.js'
 
 export async function requireUser(request, response, next) {
   response.set('Cache-Control', 'no-store')
-  const userId = await getSessionUserId(request)
-
-  if (!mongoose.isObjectIdOrHexString(userId)) {
+  const loginSession = await getActiveSession(request)
+  if (!loginSession) {
     return response.status(401).json({ message: 'Please log in to continue.' })
   }
 
-  const user = await User.findById(userId)
-  if (!user) {
+  const user = await User.findById(loginSession.user).select('+passwordVersion')
+  if (!user || (user.passwordVersion ?? 0) !== (loginSession.passwordVersion ?? 0)) {
     return response.status(401).json({ message: 'Please log in to continue.' })
   }
 
   request.user = user
+  request.loginSession = loginSession
   next()
 }
 

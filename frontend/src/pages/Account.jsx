@@ -133,6 +133,7 @@ export function Account() {
         </button>
       </div>
       <ProfileSettings user={user} />
+      <PasswordSettings />
       <SavedAddresses user={user} />
     </section>
   )
@@ -175,6 +176,68 @@ function ProfileSettings({ user }) {
         <button className="button button-outline" type="submit" disabled={saving}>
           {saving ? 'Saving…' : 'Save profile'}
         </button>
+      </form>
+      <AccountNotice notice={notice} />
+    </section>
+  )
+}
+
+function PasswordSettings() {
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState(null)
+
+  async function savePassword(event) {
+    event.preventDefault()
+    const form = event.currentTarget
+    const fields = new FormData(form)
+    const currentPassword = fields.get('currentPassword')
+    const newPassword = fields.get('newPassword')
+    const confirmation = fields.get('confirmPassword')
+
+    if (newPassword !== confirmation) {
+      setNotice({ error: true, message: 'The new passwords don’t match.' })
+      return
+    }
+    if (new TextEncoder().encode(newPassword).length > 72) {
+      setNotice({ error: true, message: 'Use a new password of at most 72 bytes.' })
+      return
+    }
+
+    setSaving(true)
+    setNotice(null)
+    try {
+      await api.patch('/auth/password', { currentPassword, newPassword })
+      form.reset()
+      setNotice({ message: 'Password changed. Your other sessions have been signed out.' })
+    } catch (requestError) {
+      setNotice({ error: true, message: errorMessage(requestError, 'We couldn’t change your password. Try again.') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="account-section" aria-labelledby="password-heading">
+      <h2 id="password-heading">Change password</h2>
+      <form onSubmit={savePassword}>
+        <fieldset className="account-form" disabled={saving}>
+          <label>
+            Current password
+            <input name="currentPassword" type="password" autoComplete="current-password" required />
+          </label>
+          <label>
+            New password
+            <input name="newPassword" type="password" autoComplete="new-password" minLength={8} required />
+            <span className="field-hint">Use at least 8 characters.</span>
+          </label>
+          <label>
+            Confirm new password
+            <input name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required />
+          </label>
+          <button className="button button-outline" type="submit">
+            {saving ? 'Changing password…' : 'Change password'}
+          </button>
+        </fieldset>
       </form>
       <AccountNotice notice={notice} />
     </section>

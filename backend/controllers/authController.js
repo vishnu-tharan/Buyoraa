@@ -1,9 +1,11 @@
 import bcrypt from 'bcryptjs'
-import User, { emailPattern } from '../models/User.js'
-import { clearSession, setSession } from '../utils/session.js'
+import mongoose from 'mongoose'
+import User, { emailPattern, LoginSession } from '../models/User.js'
+import { clearSession, createSession, setSessionCookie } from '../utils/session.js'
 
 const passwordCost = 12
 const fallbackHash = bcrypt.hashSync('unused login comparison', passwordCost)
+const sessionEnded = new Error('The current session ended before the password was changed.')
 
 function getEmail(value) {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
@@ -58,7 +60,7 @@ export async function register(request, response) {
     throw error
   }
 
-  await setSession(response, user.id)
+  setSessionCookie(response, await createSession(user.id))
   response.status(201).json({ user: accountDetails(user) })
 }
 
@@ -71,15 +73,61 @@ export async function login(request, response) {
     return response.status(401).json(incorrectLogin)
   }
 
-  const user = await User.findOne({ email: cleanEmail }).select('+passwordHash')
+  const user = await User.findOne({ email: cleanEmail }).select('+passwordHash +passwordVersion')
   const passwordMatches = await bcrypt.compare(password, user?.passwordHash ?? fallbackHash)
 
   if (!user || !passwordMatches) {
     return response.status(401).json(incorrectLogin)
   }
 
-  await setSession(response, user.id)
+  setSessionCookie(response, await createSession(user.id, user.passwordVersion ?? 0))
   response.json({ user: accountDetails(user) })
+}
+
+export async function changePassword(request, response) {
+  const { currentPassword, newPassword } = request.body ?? {}
+  if (!validPassword(currentPassword)) {
+    return response.status(400).json({ message: 'Enter your current password.' })
+  }
+  if (!validPassword(newPassword)) {
+    return response.status(400).json({ message: 'Use a new password of at least 8 characters and at most 72 bytes.' })
+  }
+
+  const version = request.loginSession.passwordVersion ?? 0
+  const account = { _id: request.user.id, passwordVersion: version === 0 ? { $in: [0, null] } : version }
+  const user = await User.findOne(account).select('+passwordHash')
+  if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    return response.status(400).json({ message: 'Your current password is incorrect.' })
+  }
+  if (currentPassword === newPassword) {
+    return response.status(400).json({ message: 'Choose a password different from your current one.' })
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, passwordCost)
+  let token
+  try {
+    token = await mongoose.connection.transaction(async (session) => {
+      const updated = await User.updateOne(
+        { ...account, passwordHash: user.passwordHash },
+        { $set: { passwordHash, passwordVersion: version + 1 } },
+        { session },
+      )
+      if (!updated.matchedCount) return null
+
+      const removed = await LoginSession.deleteOne({ _id: request.loginSession._id, expiresAt: { $gt: new Date() } }, { session })
+      if (!removed.deletedCount) throw sessionEnded
+
+      // Only the replacement session gets the new password version. Old sessions expire automatically.
+      return createSession(user.id, version + 1, session)
+    })
+  } catch (error) {
+    if (error !== sessionEnded) throw error
+  }
+
+  if (!token) return response.status(401).json({ message: 'Your session has ended. Sign in again to change your password.' })
+
+  setSessionCookie(response, token)
+  response.sendStatus(204)
 }
 
 export function currentUser(request, response) {

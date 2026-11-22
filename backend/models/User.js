@@ -24,6 +24,7 @@ const userSchema = new mongoose.Schema(
       unique: true,
     },
     passwordHash: { type: String, required: true, select: false },
+    passwordVersion: { type: Number, default: 0, select: false },
     checkoutVersion: { type: Number, select: false },
     role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
     phone: { type: String, trim: true, maxlength: 30, default: '' },
@@ -35,6 +36,7 @@ const userSchema = new mongoose.Schema(
 const loginSessionSchema = new mongoose.Schema({
   _id: String,
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  passwordVersion: { type: Number, default: 0 },
   expiresAt: { type: Date, required: true, expires: 0 },
 })
 

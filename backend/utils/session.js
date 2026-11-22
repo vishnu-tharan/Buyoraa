@@ -16,7 +16,7 @@ function cookieOptions() {
   }
 }
 
-export async function setSession(response, userId) {
+export async function createSession(userId, passwordVersion = 0, session = null) {
   const sessionId = randomUUID()
   const expiresAt = new Date(Date.now() + sessionSeconds * 1000)
   const token = jwt.sign({}, process.env.JWT_SECRET, {
@@ -27,7 +27,11 @@ export async function setSession(response, userId) {
     expiresIn: sessionSeconds,
   })
 
-  await LoginSession.create({ _id: sessionId, user: userId, expiresAt })
+  await new LoginSession({ _id: sessionId, user: userId, expiresAt, passwordVersion }).save({ session })
+  return token
+}
+
+export function setSessionCookie(response, token) {
   response.cookie(cookieName, token, { ...cookieOptions(), maxAge: sessionSeconds * 1000 })
 }
 
@@ -53,14 +57,13 @@ function readSession(request) {
   }
 }
 
-export async function getSessionUserId(request) {
+export async function getActiveSession(request) {
   const session = readSession(request)
   if (!session) return null
 
-  const activeSession = await LoginSession.exists({
+  return LoginSession.findOne({
     _id: session.jti,
     user: session.sub,
     expiresAt: { $gt: new Date() },
-  })
-  return activeSession ? session.sub : null
+  }).select('user passwordVersion').lean()
 }

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { rateLimit } from 'express-rate-limit'
-import { currentUser, login, logout, register } from '../controllers/authController.js'
+import { changePassword, currentUser, login, logout, register } from '../controllers/authController.js'
 import { requireUser } from '../middleware/auth.js'
 
 const router = Router()
@@ -10,6 +10,14 @@ const limitLoginAttempts = rateLimit({
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { message: 'Too many attempts. Try again in 15 minutes.' },
+})
+const limitPasswordChanges = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  keyGenerator: (request) => request.user.id,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { message: 'Too many password change attempts. Try again in 15 minutes.' },
 })
 
 router.use((request, response, next) => {
@@ -21,5 +29,6 @@ router.post('/register', limitLoginAttempts, register)
 router.post('/login', limitLoginAttempts, login)
 router.post('/logout', logout)
 router.get('/me', requireUser, currentUser)
+router.patch('/password', requireUser, limitPasswordChanges, changePassword)
 
 export default router
