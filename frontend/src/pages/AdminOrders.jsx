@@ -5,7 +5,7 @@ import { Loading, PageMessage, Pagination } from '../components/Feedback.jsx'
 import OrderSummary from '../components/OrderSummary.jsx'
 import { formatPrice } from '../components/ProductGrid.jsx'
 
-const dateFormat = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium' })
+const dateFormat = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium', timeZone: 'Asia/Colombo' })
 const statuses = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']
 
 function orderNumber(id) {
@@ -46,30 +46,87 @@ export function AdminOrdersTable({ orders }) {
 export function AdminOrders() {
   const [params, setParams] = useSearchParams()
   const { data, error, loading, retry } = useApi(`/admin/orders?${params}`)
+  const search = params.get('q') ?? ''
+  const status = params.get('status') ?? ''
+  const from = params.get('from') ?? ''
+  const to = params.get('to') ?? ''
 
-  function changeStatus(event) {
-    const status = event.target.value
-    setParams(status ? { status } : {})
+  function applyFilters(event) {
+    event.preventDefault()
+    const filters = new URLSearchParams()
+    for (const [name, value] of new FormData(event.currentTarget)) {
+      if (value.trim()) filters.set(name, value.trim())
+    }
+    setParams(filters)
   }
 
   return (
     <section>
       <div className="page-heading"><h1>Orders</h1></div>
-      <div className="admin-search">
+      <form className="admin-search" key={JSON.stringify([search, status, from, to])} onSubmit={applyFilters}>
+        <label>
+          Search orders
+          <input name="q" type="search" defaultValue={search} maxLength={100} placeholder="Order number, name, or phone" />
+        </label>
         <label>
           Order status
-          <select value={params.get('status') || ''} onChange={changeStatus}>
+          <select name="status" defaultValue={status}>
             <option value="">All statuses</option>
             {statuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}
           </select>
         </label>
-      </div>
+        <label>From date<input name="from" type="date" defaultValue={from} /></label>
+        <label>To date<input name="to" type="date" defaultValue={to} /></label>
+        <button className="button button-red" type="submit">Apply filters</button>
+        {(search || status || from || to) && <Link to="/admin/orders" className="text-link">Clear filters</Link>}
+      </form>
       {loading && <Loading label="Loading orders…" />}
       {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load orders.')}</PageMessage>}
-      {data?.orders.length === 0 && <PageMessage>No orders match this page.</PageMessage>}
+      {data?.orders.length === 0 && <PageMessage>No orders match these filters.</PageMessage>}
       {data?.orders.length > 0 && <AdminOrdersTable orders={data.orders} />}
       {data && <Pagination data={data} path="/admin/orders" params={params} label="Admin order pages" />}
     </section>
+  )
+}
+
+function DeliveryAddress({ address }) {
+  return (
+    <address className="not-italic wrap-anywhere">
+      {address.name}<br />{address.street}<br />{address.city}, {address.postalCode}<br />
+      {address.country}<br />{address.phone}
+    </address>
+  )
+}
+
+function DeliveryInstructions({ instructions }) {
+  if (!instructions) return null
+
+  return (
+    <div>
+      <h2>Delivery instructions</h2>
+      <p className="whitespace-pre-wrap wrap-anywhere">{instructions}</p>
+    </div>
+  )
+}
+
+function PackingSlip({ order }) {
+  return (
+    <article className="packing-slip">
+      <h1>Buyora packing slip</h1>
+      <p>Order {orderNumber(order._id)} · {dateFormat.format(new Date(order.createdAt))}</p>
+      <h2>Deliver to</h2>
+      <DeliveryAddress address={order.shippingAddress} />
+      <DeliveryInstructions instructions={order.deliveryInstructions} />
+      <h2>Items</h2>
+      <table>
+        <thead><tr><th scope="col">Item</th><th scope="col">Quantity</th></tr></thead>
+        <tbody>
+          {order.orderItems.map((item, index) => (
+            <tr key={`${item.product}-${index}`}><td>{item.name}</td><td>{item.quantity}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </article>
   )
 }
 
@@ -104,11 +161,16 @@ export function AdminOrderDetails() {
   const address = order.shippingAddress
 
   return (
-    <section>
+    <section className="admin-order-details">
       <Link className="text-link mb-4" to="/admin/orders">Back to orders</Link>
-      <div className="page-heading">
-        <h1>Order {orderNumber(order._id)}</h1>
-        <p>{dateFormat.format(new Date(order.createdAt))} · {statusLabel(order.orderStatus)}</p>
+      <div className="page-heading admin-page-heading">
+        <div>
+          <h1>Order {orderNumber(order._id)}</h1>
+          <p>{dateFormat.format(new Date(order.createdAt))} · {statusLabel(order.orderStatus)}</p>
+        </div>
+        {order.orderStatus !== 'cancelled' && (
+          <button className="button button-outline" type="button" onClick={() => window.print()}>Print packing slip</button>
+        )}
       </div>
       {notice && <p className={notice.error ? 'form-error mb-4' : 'mb-4'} role={notice.error ? 'alert' : 'status'}>{notice.message}</p>}
       <div className="cart-layout">
@@ -116,10 +178,8 @@ export function AdminOrderDetails() {
           <h2>Customer</h2>
           <p>{order.user?.name ?? address.name}{order.user?.email && <><br />{order.user.email}</>}</p>
           <h2>Delivery address</h2>
-          <address className="not-italic">
-            {address.name}<br />{address.street}<br />{address.city}, {address.postalCode}<br />
-            {address.country}<br />{address.phone}
-          </address>
+          <DeliveryAddress address={address} />
+          <DeliveryInstructions instructions={order.deliveryInstructions} />
           <h2>Purchased items</h2>
           <ul className="order-lines">
             {order.orderItems.map((item, index) => (
@@ -148,6 +208,7 @@ export function AdminOrderDetails() {
           )}
         </OrderSummary>
       </div>
+      {order.orderStatus !== 'cancelled' && <PackingSlip order={order} />}
     </section>
   )
 }

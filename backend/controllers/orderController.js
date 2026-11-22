@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import mongoose from 'mongoose'
 import Order, { orderStatuses } from '../models/Order.js'
-import Product, { activeProducts } from '../models/Product.js'
+import Product, { activeProducts, StockChange } from '../models/Product.js'
 import User from '../models/User.js'
 import { readAddress, readPhone } from '../utils/address.js'
 import { calculateCart, validateCartItems } from './cartController.js'
@@ -49,14 +49,17 @@ export async function changeOrderStatus({ orderId, status, customerId }) {
       await order.save({ session })
 
       if (status === 'cancelled') {
+        const changes = []
         for (const { product, quantity } of order.orderItems) {
-          const restored = await Product.updateOne(
+          const restored = await Product.findOneAndUpdate(
             { _id: product, stock: { $lte: Number.MAX_SAFE_INTEGER - quantity } },
             { $inc: { stock: quantity, __v: 1 } },
-            { session },
-          )
-          if (restored.modifiedCount !== 1) throw restockFailed
+            { session, returnDocument: 'after' },
+          ).select('stock').lean()
+          if (!restored) throw restockFailed
+          changes.push({ product, order: order._id, reason: 'cancellation', quantityChange: quantity, stockAfter: restored.stock })
         }
+        await StockChange.insertMany(changes, { session })
       }
 
       return { httpStatus: 204 }
@@ -110,7 +113,7 @@ export async function checkoutAttempt(request, response) {
 }
 
 export async function placeOrder(request, response) {
-  const { items, shippingAddress, expectedTotal, checkoutKey } = request.body ?? {}
+  const { items, shippingAddress, expectedTotal, checkoutKey, deliveryInstructions = '' } = request.body ?? {}
   const cart = validateCartItems(items)
   if (cart.error || !cart.items.length) {
     return response.status(400).json({ message: cart.error || 'Your cart is empty.' })
@@ -126,11 +129,15 @@ export async function placeOrder(request, response) {
   if (!address || !name || name.length > 100 || !phone) {
     return response.status(400).json({ message: 'Enter a complete delivery address and a valid contact number.' })
   }
+  if (typeof deliveryInstructions !== 'string' || deliveryInstructions.trim().length > 300) {
+    return response.status(400).json({ message: 'Use up to 300 characters for delivery instructions.' })
+  }
 
   const delivery = { ...address, name, phone }
+  const instructions = deliveryInstructions.trim() || undefined
   const sortedItems = cart.items.toSorted((first, second) => first.productId.localeCompare(second.productId))
   const checkoutFingerprint = createHash('sha256')
-    .update(JSON.stringify({ items: sortedItems, delivery }))
+    .update(JSON.stringify({ items: sortedItems, delivery, instructions }))
     .digest('hex')
   const user = request.user.id
 
@@ -147,6 +154,7 @@ export async function placeOrder(request, response) {
       await checkOrderLimit(user, session)
 
       const orderItems = []
+      const changes = []
       for (const { product, quantity } of quote.lines) {
         const updated = await Product.updateOne(
           { _id: product._id, stock: { $gte: quantity }, ...activeProducts },
@@ -156,12 +164,15 @@ export async function placeOrder(request, response) {
         if (updated.modifiedCount !== 1) throw stockChanged
 
         orderItems.push({ product: product._id, name: product.name, price: product.price, quantity })
+        changes.push({ product: product._id, reason: 'order', quantityChange: -quantity, stockAfter: product.stock - quantity })
       }
 
       const [order] = await Order.create([{
         user, orderItems, shippingAddress: delivery, checkoutKey, checkoutFingerprint,
+        deliveryInstructions: instructions,
         subtotal: quote.subtotal, shippingFee: quote.shippingFee, totalAmount: quote.totalAmount,
       }], { session })
+      await StockChange.insertMany(changes.map((change) => ({ ...change, order: order._id })), { session })
 
       return { order, created: true }
     }, { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' } })

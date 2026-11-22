@@ -103,6 +103,10 @@ Add categories before products. Enter product prices in rupees and add one image
 
 Orders move from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. Cancelling a pending or confirmed order restores stock. Marking an order delivered records its Cash on Delivery payment as paid. The dashboard's collected sales total includes delivery charges on delivered and paid orders.
 
+In **Admin → Orders**, search by order number, customer or recipient name, or phone number. Combine the search with status and date filters. Both dates are inclusive and use Sri Lanka time. Open an order to print a packing slip with its delivery address, instructions, items, and quantities.
+
+Open a product for editing to see **Stock history**. It records changes from product creation, manual stock edits, orders, and cancellations after this feature is deployed.
+
 ## Verify the app
 
 | Area | What to check |
@@ -110,8 +114,8 @@ Orders move from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. C
 | Catalog | Search by name, combine category and price filters, sort prices, and open a product. Test a search that returns no results. |
 | Account | Register, sign out and back in, reload the account page, and add, edit, or remove a delivery address. Signing out ends the current session. |
 | Cart and wishlist | Change quantities and reload the cart. Switch accounts in the same browser and verify that each account sees its own cart. Save a product to the wishlist and move it to the cart. Check that unavailable stock is flagged. |
-| Checkout | Use a saved address, confirm the total, place a Cash on Delivery order, and verify the cart clears and the order appears in **My orders**. |
-| Admin | Create a category and product, edit stock, search customers, and process an order. Try the admin URL using a customer account. |
+| Checkout | Use a saved address, add optional delivery instructions, place a Cash on Delivery order, and verify that the order and instructions appear in **My orders**. |
+| Admin | Search and filter orders, print a packing slip, and check the history after editing stock and cancelling an order. Try the admin URL using a customer account. |
 | Build | From the project root, run `npm.cmd run build --prefix frontend`. With the development API running and Vite stopped, use `npm.cmd run preview --prefix frontend`. |
 
 ### Postman
@@ -125,7 +129,7 @@ Use `http://127.0.0.1:5000` for all requests so Postman can reuse the login cook
 | `GET /api/products?q=lamp&maxPrice=6000&sort=price-asc` | Price filters use rupees. The endpoint also supports category, featured status, and pagination. |
 | `POST /api/cart/quote` | Send `items` with a `productId` and `quantity` per line. Confirm current stock and total. |
 | `PUT /api/wishlist/:productId` and `GET /api/wishlist` | Save a product and verify that it appears once in the signed-in account's list. |
-| `POST /api/orders` | Send the cart's `items`, `expectedTotal` from the quote in cents, a UUID `checkoutKey`, and `shippingAddress` with `name`, `phone`, `street`, `city`, `postalCode`, and `country`. Sending the same request twice returns 201 and then 200 with the same order ID. |
+| `POST /api/orders` | Send the cart's `items`, `expectedTotal` from the quote in cents, a UUID `checkoutKey`, and `shippingAddress` with `name`, `phone`, `street`, `city`, `postalCode`, and `country`. `deliveryInstructions` is optional and accepts up to 300 characters. Sending the same request twice returns 201 and then 200 with the same order ID. |
 | `GET /api/orders` and `GET /api/orders/:id` | Verify that customers can read their own orders. |
 | `GET /api/admin/overview` | Expect 200 for an admin and 403 for a signed-in customer. |
 

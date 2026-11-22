@@ -269,6 +269,12 @@ function OrderPage({ confirmation = false }) {
             {address.country}<br />
             {address.phone}
           </address>
+          {order.deliveryInstructions && (
+            <div>
+              <h2>Delivery instructions</h2>
+              <p className="whitespace-pre-wrap wrap-anywhere text-stone-600">{order.deliveryInstructions}</p>
+            </div>
+          )}
         </div>
         <OrderSummary amounts={order}>
           <p>Cash on Delivery · {cancelled && order.paymentStatus === 'pending' ? 'No payment due' : `Payment ${order.paymentStatus}`}</p>

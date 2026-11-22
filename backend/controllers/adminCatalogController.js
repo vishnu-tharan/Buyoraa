@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 import Category from '../models/Category.js'
-import Product, { activeProducts } from '../models/Product.js'
+import Product, { activeProducts, StockChange } from '../models/Product.js'
 import { readPage } from '../utils/query.js'
 
 function readText(value) {
@@ -74,6 +74,27 @@ export async function adminProduct(request, response) {
   response.json({ product })
 }
 
+export async function adminStockHistory(request, response) {
+  const page = readPage(request.query.page)
+  if (!page) return response.status(400).json({ message: 'Enter a valid page number.' })
+
+  const product = request.params.id
+  if (!(await Product.exists({ _id: product }))) return response.status(404).json({ message: 'Product not found.' })
+
+  const pageSize = 20
+  const [changes, total] = await Promise.all([
+    StockChange.find({ product })
+      .select('createdAt order reason quantityChange stockAfter')
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .lean(),
+    StockChange.countDocuments({ product }),
+  ])
+
+  response.json({ changes, page, pageSize, total })
+}
+
 async function lockCategory(id, session) {
   // Product writes and category deletion both update the category inside their transactions.
   const result = await Category.updateOne({ _id: id }, { $inc: { __v: 1 } }, { session })
@@ -91,28 +112,36 @@ export async function saveProduct(request, response) {
   }
 
   const result = await mongoose.connection.transaction(async (session) => {
+    let previousStock = 0
     if (id) {
-      const current = await Product.findOne({ _id: id, ...activeProducts }).select('__v').session(session).lean()
+      const current = await Product.findOne({ _id: id, ...activeProducts }).select('__v stock').session(session).lean()
       if (!current) return { status: 404, message: 'Product not found.' }
       if ((current.__v ?? 0) !== version) {
         return { status: 409, message: 'This product or its stock has changed. Reload it before saving.' }
       }
+      previousStock = current.stock
     }
 
     if (!(await lockCategory(fields.category, session))) {
       return { status: 400, message: 'Choose an existing category.' }
     }
 
-    if (!id) {
-      const [product] = await Product.create([fields], { session })
-      return { product, status: 201 }
+    const product = id
+      ? await Product.findByIdAndUpdate(id, { $set: fields, $inc: { __v: 1 } }, {
+        session, runValidators: true, returnDocument: 'after',
+      })
+      : await new Product(fields).save({ session })
+
+    if (product.stock !== previousStock) {
+      await new StockChange({
+        product: product._id,
+        reason: id ? 'manual' : 'initial',
+        quantityChange: product.stock - previousStock,
+        stockAfter: product.stock,
+      }).save({ session })
     }
 
-    const product = await Product.findByIdAndUpdate(
-      id, { $set: fields, $inc: { __v: 1 } },
-      { session, runValidators: true, returnDocument: 'after' },
-    )
-    return { product, status: 200 }
+    return { product, status: id ? 200 : 201 }
   })
 
   response.status(result.status).json(result.message ? { message: result.message } : { product: result.product })

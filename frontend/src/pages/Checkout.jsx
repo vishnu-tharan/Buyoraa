@@ -61,6 +61,7 @@ function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
       const { data: placed } = await api.post('/orders', {
         items,
         shippingAddress,
+        deliveryInstructions: form.get('deliveryInstructions').trim(),
         checkoutKey: attempt.current,
         expectedTotal: data.totalAmount,
       })
@@ -108,6 +109,10 @@ function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
             </label>
           )}
           <AddressFields key={addressId} address={address} />
+          <label className="col-span-full">
+            Delivery instructions (optional)
+            <textarea name="deliveryInstructions" rows={3} maxLength={300} placeholder="For example, call when you reach the main gate." />
+          </label>
         </fieldset>
         <div className="checkout-payment">
           <Banknote size={21} aria-hidden="true" />

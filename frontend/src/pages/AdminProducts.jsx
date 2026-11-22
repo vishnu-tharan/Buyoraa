@@ -4,6 +4,16 @@ import { api, errorMessage, useApi } from '../api.js'
 import { Loading, PageMessage, Pagination } from '../components/Feedback.jsx'
 import { formatPrice, ProductImage } from '../components/ProductGrid.jsx'
 
+const stockDateFormat = new Intl.DateTimeFormat('en-LK', {
+  dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Colombo',
+})
+const stockReasons = {
+  initial: 'Initial stock',
+  manual: 'Manual edit',
+  order: 'Order placed',
+  cancellation: 'Order cancelled',
+}
+
 export function AdminProducts() {
   const [params, setParams] = useSearchParams()
   const { state } = useLocation()
@@ -195,7 +205,52 @@ function EditProduct({ id, categories }) {
   if (loading) return <Loading label="Loading product…" />
   if (error) return <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load the product.')}</PageMessage>
 
-  return <ProductEditor key={id} product={data.product} categories={categories} reloadProduct={retry} />
+  return (
+    <>
+      <ProductEditor key={id} product={data.product} categories={categories} reloadProduct={retry} />
+      <StockHistory id={id} />
+    </>
+  )
+}
+
+function StockHistory({ id }) {
+  const [params] = useSearchParams()
+  const page = params.get('page') ?? '1'
+  const { data, error, loading, retry } = useApi(`/admin/products/${encodeURIComponent(id)}/stock-history?${new URLSearchParams({ page })}`)
+
+  return (
+    <section className="mt-6" aria-labelledby="stock-history-title">
+      <div className="section-heading"><h2 id="stock-history-title">Stock history</h2></div>
+      {loading && <Loading label="Loading stock history…" />}
+      {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load stock history.')}</PageMessage>}
+      {data?.changes.length === 0 && <PageMessage>No stock changes on this page.</PageMessage>}
+      {data?.changes.length > 0 && (
+        <div className="admin-table">
+          <table>
+            <thead><tr>
+              <th scope="col">Date</th><th scope="col">Reason</th><th scope="col">Change</th><th scope="col">Stock after</th>
+            </tr></thead>
+            <tbody>
+              {data.changes.map((change) => (
+                <tr key={change._id}>
+                  <td>{stockDateFormat.format(new Date(change.createdAt))}</td>
+                  <td>
+                    {stockReasons[change.reason]}
+                    {change.order && (
+                      <Link className="text-link ml-2" to={`/admin/orders/${change.order}`}>#{change.order.slice(-8).toUpperCase()}</Link>
+                    )}
+                  </td>
+                  <td>{change.quantityChange > 0 ? '+' : ''}{change.quantityChange}</td>
+                  <td>{change.stockAfter}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {data && <Pagination data={data} path={`/admin/products/${id}`} params={params} label="Stock history pages" />}
+    </section>
+  )
 }
 
 export function AdminProductForm() {

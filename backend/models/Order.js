@@ -33,6 +33,7 @@ const orderSchema = new mongoose.Schema(
       },
     },
     shippingAddress: { type: shippingAddressSchema, required: true },
+    deliveryInstructions: { type: String, trim: true, maxlength: 300 },
     subtotal: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
     shippingFee: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
     totalAmount: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
@@ -50,6 +51,8 @@ const orderSchema = new mongoose.Schema(
 )
 
 orderSchema.index({ user: 1, createdAt: -1, _id: -1 })
+orderSchema.index({ createdAt: -1, _id: -1 })
+orderSchema.index({ orderStatus: 1, createdAt: -1, _id: -1 })
 orderSchema.index(
   { user: 1, checkoutKey: 1 },
   { unique: true, partialFilterExpression: { checkoutKey: { $type: 'string' } } },
