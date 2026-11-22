@@ -1,11 +1,12 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useLayoutEffect, useRef, useState } from 'react'
 import { useAuth } from './AuthContext.jsx'
 import { api } from './api.js'
 
 const CartContext = createContext(null)
-const storageKey = 'buyora-cart'
 
-function saveCart(items) {
+function saveCart(storageKey, items) {
+  if (!storageKey) return
+
   try {
     localStorage.setItem(storageKey, JSON.stringify(items))
   } catch {
@@ -13,7 +14,9 @@ function saveCart(items) {
   }
 }
 
-function readCart() {
+function readCart(storageKey) {
+  if (!storageKey) return []
+
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey))
     if (!Array.isArray(saved)) return []
@@ -35,50 +38,57 @@ function readCart() {
 
 export function CartProvider({ children }) {
   const { user } = useAuth()
-  const [items, setItems] = useState(readCart)
+  const storageKey = user?.id ? `buyora-cart-${user.id}` : ''
+
+  return <AccountCart key={storageKey} storageKey={storageKey}>{children}</AccountCart>
+}
+
+function AccountCart({ storageKey, children }) {
+  const [items, setItems] = useState(() => readCart(storageKey))
   const latestItems = useRef(items)
-  const currentUser = useRef(user)
+  const active = useRef(false)
 
-  useEffect(() => {
-    currentUser.current = user
-  }, [user])
+  useLayoutEffect(() => {
+    active.current = true
+    return () => { active.current = false }
+  }, [])
 
-  useEffect(() => {
-    latestItems.current = items
-    saveCart(items)
-  }, [items])
+  function updateCart(nextItems) {
+    if (!active.current) return
+    latestItems.current = nextItems
+    saveCart(storageKey, nextItems)
+    setItems(nextItems)
+  }
 
   function addItem(product, { onlyIfMissing = false } = {}) {
-    if (!user) return 'Sign in to add items to your cart.'
+    if (!storageKey || !active.current) return 'Sign in to add items to your cart.'
 
-    const current = items.find(({ productId }) => productId === product._id)
+    const previous = latestItems.current
+    const current = previous.find(({ productId }) => productId === product._id)
     if (current && onlyIfMissing) return ''
 
     const quantity = (current?.quantity ?? 0) + 1
     if (quantity > product.stock) return 'The available stock is already in your cart.'
     if (quantity > 99) return 'You can add up to 99 of the same product.'
-    if (!current && items.length === 50) return 'Your cart can hold up to 50 different products.'
+    if (!current && previous.length === 50) return 'Your cart can hold up to 50 different products.'
 
-    setItems((previous) => {
-      if (current) {
-        return previous.map((item) => item.productId === product._id ? { ...item, quantity } : item)
-      }
-
-      return [...previous, { productId: product._id, quantity }]
-    })
+    const nextItems = current
+      ? previous.map((item) => item.productId === product._id ? { ...item, quantity } : item)
+      : [...previous, { productId: product._id, quantity }]
+    updateCart(nextItems)
     return ''
   }
 
   function setQuantity(productId, quantity) {
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) return
 
-    setItems((previous) => previous.map((item) => (
-      item.productId === productId && (user || quantity <= item.quantity) ? { ...item, quantity } : item
+    updateCart(latestItems.current.map((item) => (
+      item.productId === productId ? { ...item, quantity } : item
     )))
   }
 
   function removeItem(productId) {
-    setItems((previous) => previous.filter((item) => item.productId !== productId))
+    updateCart(latestItems.current.filter((item) => item.productId !== productId))
   }
 
   function removeOrderedItems(orderedItems) {
@@ -87,18 +97,15 @@ export function CartProvider({ children }) {
       .map((item) => ({ ...item, quantity: item.quantity - (ordered.get(item.productId) ?? 0) }))
       .filter(({ quantity }) => quantity > 0)
 
-    latestItems.current = remaining
-    saveCart(remaining)
-    setItems(remaining)
+    updateCart(remaining)
   }
 
   async function buyAgain(orderItems) {
-    const shopperId = user?.id
-    if (!shopperId) throw new Error('Sign in to add items to your cart.')
+    if (!storageKey || !active.current) throw new Error('Sign in to add items to your cart.')
 
     const requestedItems = orderItems.map(({ product, quantity }) => ({ productId: product, quantity }))
     const { data } = await api.post('/cart/quote', { items: requestedItems })
-    if (currentUser.current?.id !== shopperId) throw new Error('Sign in again before adding these items.')
+    if (!active.current) throw new Error('Sign in again before adding these items.')
 
     const remaining = latestItems.current.map((item) => ({ ...item }))
     const adjustments = []
@@ -130,9 +137,7 @@ export function CartProvider({ children }) {
       }
     }
 
-    latestItems.current = remaining
-    saveCart(remaining)
-    setItems(remaining)
+    updateCart(remaining)
     return { added, adjustments }
   }
 

@@ -33,7 +33,7 @@ Buyora/
 
 React Router handles navigation. React Context tracks the session and the browser cart. In development, Vite forwards Axios requests from `/api` to Express. Express validates inputs, reads and writes MongoDB through Mongoose, and issues HTTP-only cookies for JWT sessions. Tailwind CSS and Lucide React are used in the storefront.
 
-MongoDB stores product and order amounts as integer cents. The browser displays those values in LKR. Express calculates actual prices, stock, and the LKR 350 delivery fee at checkout. Order creation and stock deduction happen in one transaction.
+MongoDB stores product and order amounts as integer cents. The browser displays those values in LKR. Express calculates actual prices, stock, and the LKR 350 delivery fee at checkout. Order creation and stock deduction happen in one transaction. Each account can place up to five new orders in 15 minutes. Retrying a completed checkout with the same key returns its existing order.
 
 ## Run locally on Windows
 
@@ -108,8 +108,8 @@ Orders move from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. C
 | Area | What to check |
 | --- | --- |
 | Catalog | Search by name, combine category and price filters, sort prices, and open a product. Test a search that returns no results. |
-| Account | Register, sign out and back in, reload the account page, and add, edit, or remove a delivery address. |
-| Cart and wishlist | Change quantities and reload the cart. Save a product to the wishlist and move it to the cart. Check that unavailable stock is flagged. |
+| Account | Register, sign out and back in, reload the account page, and add, edit, or remove a delivery address. Signing out ends the current session. |
+| Cart and wishlist | Change quantities and reload the cart. Switch accounts in the same browser and verify that each account sees its own cart. Save a product to the wishlist and move it to the cart. Check that unavailable stock is flagged. |
 | Checkout | Use a saved address, confirm the total, place a Cash on Delivery order, and verify the cart clears and the order appears in **My orders**. |
 | Admin | Create a category and product, edit stock, search customers, and process an order. Try the admin URL using a customer account. |
 | Build | From the project root, run `npm.cmd run build --prefix frontend`. With the development API running and Vite stopped, use `npm.cmd run preview --prefix frontend`. |

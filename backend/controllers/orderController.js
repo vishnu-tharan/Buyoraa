@@ -2,12 +2,22 @@ import { createHash } from 'node:crypto'
 import mongoose from 'mongoose'
 import Order, { orderStatuses } from '../models/Order.js'
 import Product, { activeProducts } from '../models/Product.js'
+import User from '../models/User.js'
 import { readAddress, readPhone } from '../utils/address.js'
 import { calculateCart, validateCartItems } from './cartController.js'
 
 const checkoutKeyPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/
+const checkoutLimit = 5
+const checkoutWindowMs = 15 * 60 * 1000
 const stockChanged = new Error('Stock changed during checkout.')
 const restockFailed = new Error('Could not restore order stock.')
+
+class CheckoutLimitError extends Error {
+  constructor(retryAfter) {
+    super('Too many orders. Please wait before placing another order.')
+    this.retryAfter = retryAfter
+  }
+}
 
 export const nextStatuses = {
   pending: ['confirmed', 'cancelled'],
@@ -71,6 +81,24 @@ function orderReceipt(order) {
   }
 }
 
+async function checkOrderLimit(user, session) {
+  // A write to the account makes concurrent checkouts for that account retry in order.
+  await User.updateOne({ _id: user }, { $inc: { checkoutVersion: 1 } }, { session, timestamps: false })
+
+  const now = Date.now()
+  const oldestOrderAtLimit = await Order.findOne({ user, createdAt: { $gt: new Date(now - checkoutWindowMs) } })
+    .sort({ createdAt: -1, _id: -1 })
+    .skip(checkoutLimit - 1)
+    .select('createdAt')
+    .session(session)
+    .lean()
+
+  if (oldestOrderAtLimit) {
+    const retryAfter = Math.ceil((oldestOrderAtLimit.createdAt.getTime() + checkoutWindowMs - now) / 1000)
+    throw new CheckoutLimitError(retryAfter)
+  }
+}
+
 export async function checkoutAttempt(request, response) {
   const { checkoutKey } = request.params
   if (!checkoutKeyPattern.test(checkoutKey)) {
@@ -116,6 +144,8 @@ export async function placeOrder(request, response) {
       if (!quote.canCheckout) return { message: 'Stock has changed. Review the quantities in your cart.' }
       if (quote.totalAmount !== expectedTotal) return { message: 'The total has changed. Review the updated price before placing your order.' }
 
+      await checkOrderLimit(user, session)
+
       const orderItems = []
       for (const { product, quantity } of quote.lines) {
         const updated = await Product.updateOne(
@@ -136,6 +166,9 @@ export async function placeOrder(request, response) {
       return { order, created: true }
     }, { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' } })
   } catch (error) {
+    if (error instanceof CheckoutLimitError) {
+      return response.set('Retry-After', String(error.retryAfter)).status(429).json({ message: error.message })
+    }
     if (error === stockChanged) {
       return response.status(409).json({ message: 'Stock has changed. Review the quantities in your cart.' })
     }

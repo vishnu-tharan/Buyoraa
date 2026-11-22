@@ -113,6 +113,7 @@ function BuyAgain({ orderItems }) {
     inFlight.current = true
     setAdding(true)
     setError('')
+    setResult(null)
     try {
       setResult(await buyAgain(orderItems))
     } catch (requestError) {
@@ -127,7 +128,7 @@ function BuyAgain({ orderItems }) {
     <div className="mt-3">
       <p className="mb-2 text-sm text-stone-600">Add these items to your cart at current prices, subject to availability.</p>
       <div className="flex flex-wrap gap-3">
-        <button type="button" className="button button-red" onClick={addOrderItems} disabled={adding || Boolean(result)}>
+        <button type="button" className="button button-red" onClick={addOrderItems} disabled={adding || result?.added > 0}>
           {adding ? 'Checking availability…' : 'Buy again'}
         </button>
         {result?.added > 0 && <Link className="button button-outline" to="/cart">View cart</Link>}

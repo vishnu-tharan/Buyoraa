@@ -24,11 +24,20 @@ const userSchema = new mongoose.Schema(
       unique: true,
     },
     passwordHash: { type: String, required: true, select: false },
+    checkoutVersion: { type: Number, select: false },
     role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
     phone: { type: String, trim: true, maxlength: 30, default: '' },
     addresses: [addressSchema],
   },
   { timestamps: true },
 )
+
+const loginSessionSchema = new mongoose.Schema({
+  _id: String,
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  expiresAt: { type: Date, required: true, expires: 0 },
+})
+
+export const LoginSession = mongoose.model('LoginSession', loginSessionSchema)
 
 export default mongoose.model('User', userSchema)

@@ -4,7 +4,7 @@ import { getSessionUserId } from '../utils/session.js'
 
 export async function requireUser(request, response, next) {
   response.set('Cache-Control', 'no-store')
-  const userId = getSessionUserId(request)
+  const userId = await getSessionUserId(request)
 
   if (!mongoose.isObjectIdOrHexString(userId)) {
     return response.status(401).json({ message: 'Please log in to continue.' })

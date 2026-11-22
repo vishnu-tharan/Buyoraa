@@ -58,7 +58,7 @@ export async function register(request, response) {
     throw error
   }
 
-  setSession(response, user.id)
+  await setSession(response, user.id)
   response.status(201).json({ user: accountDetails(user) })
 }
 
@@ -78,7 +78,7 @@ export async function login(request, response) {
     return response.status(401).json(incorrectLogin)
   }
 
-  setSession(response, user.id)
+  await setSession(response, user.id)
   response.json({ user: accountDetails(user) })
 }
 
@@ -86,7 +86,7 @@ export function currentUser(request, response) {
   response.json({ user: accountDetails(request.user) })
 }
 
-export function logout(request, response) {
-  clearSession(response)
+export async function logout(request, response) {
+  await clearSession(request, response)
   response.sendStatus(204)
 }
