@@ -167,7 +167,7 @@ npm start --prefix backend
 | `FRONTEND_ORIGIN` | The public HTTPS origin, with no trailing slash |
 | `PORT` | The host's assigned port when provided |
 | `HOST` | Defaults to `0.0.0.0` in production. Use `127.0.0.1` when a reverse proxy on the same machine is the only intended entry point. |
-| `TRUST_PROXY` | Leave unset for direct connections. Behind a proxy, set the trusted proxy IP or subnet so authentication rate limits use the correct client address. Use `loopback` for a proxy on the same machine. |
+| `TRUST_PROXY` | Leave unset for direct connections. Set a trusted proxy IP or subnet, or a number for a fixed proxy hop count. Use `1` only when all requests reach Buyora through exactly one trusted proxy. Use `loopback` for a proxy on the same machine. |
 
 On **Render**, create a Node Web Service connected to the repository root. Use the build and start commands above, set `SKIP_INSTALL_DEPS=true` because the build command installs both packages, and enter the environment values in the dashboard. Use `/api/health` as the health check. Allow the service's outbound addresses in Atlas. [Render Web Services](https://render.com/docs/web-services) [Render environment variables](https://render.com/docs/environment-variables) [Atlas network access](https://www.mongodb.com/docs/atlas/connect-to-database-deployment/)
 

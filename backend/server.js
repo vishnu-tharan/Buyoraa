@@ -25,7 +25,15 @@ const frontendBuild = fileURLToPath(new URL('../frontend/dist/', import.meta.url
 const frontendIndex = fileURLToPath(new URL('../frontend/dist/index.html', import.meta.url))
 
 app.disable('x-powered-by')
-if (process.env.TRUST_PROXY) app.set('trust proxy', process.env.TRUST_PROXY)
+const trustProxy = process.env.TRUST_PROXY?.trim()
+if (trustProxy) app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy)
+
+app.use((request, response, next) => {
+  response.set('X-Frame-Options', 'DENY')
+  response.set('X-Content-Type-Options', 'nosniff')
+  response.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  next()
+})
 
 // Browser requests use Vite's same-origin proxy during development.
 app.use('/api', (request, response, next) => {
