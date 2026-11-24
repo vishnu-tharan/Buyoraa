@@ -10,8 +10,9 @@ export function formatPrice(price) {
 
 export function ProductImage({ source, alt, eager = false }) {
   const [failedSource, setFailedSource] = useState(null)
+  const imageUrl = window.location.protocol === 'https:' ? source?.replace(/^http:\/\//i, 'https://') : source
 
-  if (!source || source === failedSource) {
+  if (!imageUrl || imageUrl === failedSource) {
     return (
       <div className="product-image product-image-empty" role="img" aria-label={alt || 'Product image unavailable'}>
         <ImageIcon size={28} aria-hidden="true" />
@@ -22,10 +23,10 @@ export function ProductImage({ source, alt, eager = false }) {
   return (
     <img
       className="product-image"
-      src={source}
+      src={imageUrl}
       alt={alt}
       loading={eager ? 'eager' : 'lazy'}
-      onError={() => setFailedSource(source)}
+      onError={() => setFailedSource(imageUrl)}
     />
   )
 }

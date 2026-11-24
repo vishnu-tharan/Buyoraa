@@ -183,9 +183,11 @@ function ProductPhotos({ product }) {
 }
 
 function ProductInformation({ product, relatedProducts, catalogReturn }) {
+  const { user } = useAuth()
+
   useEffect(() => {
-    rememberProduct(product._id)
-  }, [product._id])
+    if (user) rememberProduct(product._id)
+  }, [product._id, user])
 
   const available = product.stock > 0
   const StockIcon = available ? PackageCheck : PackageX

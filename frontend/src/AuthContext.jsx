@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { api } from './api.js'
+import { api, clearRecentProducts, clearShoppingStorage } from './api.js'
 
 const AuthContext = createContext(null)
+const signOutKey = 'buyora-sign-out'
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -21,22 +22,40 @@ export function AuthProvider({ children }) {
       }
     }
 
+    function handleSignOut(event) {
+      if (event.key !== signOutKey || !event.newValue) return
+      controller.abort()
+      clearShoppingStorage()
+      setUser(null)
+      setLoading(false)
+    }
+
+    window.addEventListener('storage', handleSignOut)
     restoreSession()
-    return () => controller.abort()
+    return () => {
+      controller.abort()
+      window.removeEventListener('storage', handleSignOut)
+    }
   }, [])
 
   async function signIn(credentials) {
     const { data } = await api.post('/auth/login', credentials)
+    clearRecentProducts()
     setUser(data.user)
   }
 
   async function register(details) {
-    const { data } = await api.post('/auth/register', details)
-    setUser(data.user)
+    await api.post('/auth/register', details)
   }
 
   async function signOut() {
     await api.post('/auth/logout')
+    clearShoppingStorage()
+    try {
+      localStorage.setItem(signOutKey, String(Date.now()))
+    } catch {
+      // Sign-out still works when storage is unavailable.
+    }
     setUser(null)
   }
 

@@ -190,7 +190,7 @@ function ProductEditor({ product, categories, reloadProduct }) {
         <label className="admin-full-field">
           Image URLs
           <textarea name="images" rows={3} defaultValue={product?.images?.join('\n') ?? ''} placeholder="https://example.com/product.jpg" required />
-          <span className="field-hint">Enter one HTTP or HTTPS URL per line.</span>
+          <span className="field-hint">Enter one URL per line. The live store requires HTTPS image URLs.</span>
         </label>
         <label className="admin-checkbox">
           <input type="checkbox" name="featured" defaultChecked={product?.featured ?? false} />

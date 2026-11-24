@@ -1,6 +1,6 @@
 import { LogOut, ShieldCheck, UserRound } from 'lucide-react'
 import { useState } from 'react'
-import { Link, Navigate, useLocation } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { api, errorMessage } from '../api.js'
 import { useAuth } from '../AuthContext.jsx'
 import AddressFields, { collectAddress } from '../components/AddressFields.jsx'
@@ -9,6 +9,7 @@ import { Loading } from '../components/Feedback.jsx'
 export function AuthForm({ registerMode = false }) {
   const { user, loading, register, signIn } = useAuth()
   const { state } = useLocation()
+  const navigate = useNavigate()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const from = state?.from
@@ -42,6 +43,7 @@ export function AuthForm({ registerMode = false }) {
     try {
       if (registerMode) {
         await register({ name, email, password })
+        navigate('/login', { replace: true, state: { from, catalogReturn: state?.catalogReturn, afterRegistration: true } })
       } else {
         await signIn({ email, password })
       }
@@ -55,6 +57,9 @@ export function AuthForm({ registerMode = false }) {
   return (
     <section className="account-panel">
       <h1>{title}</h1>
+      {!registerMode && state?.afterRegistration && (
+        <p className="mt-3 text-sm" role="status">Registration request received. Sign in to continue.</p>
+      )}
       <form onSubmit={submit} className="account-form">
         {registerMode && (
           <label>

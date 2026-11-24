@@ -12,7 +12,8 @@ function validImage(value) {
 
   try {
     const url = new URL(value)
-    return ['http:', 'https:'].includes(url.protocol) && /^https?:\/\//i.test(value)
+    const allowedProtocol = url.protocol === 'https:' || (url.protocol === 'http:' && process.env.NODE_ENV !== 'production')
+    return allowedProtocol && /^https?:\/\//i.test(value)
       && !url.username && !url.password
   } catch {
     return false
@@ -25,7 +26,8 @@ function productFields(input = {}) {
   const { price, stock, category, featured = false, images } = input
 
   if (!name || name.length > 150 || !description || description.length > 5000
-    || !mongoose.isObjectIdOrHexString(category) || !Number.isSafeInteger(price) || price < 0
+    || typeof category !== 'string' || !mongoose.isObjectIdOrHexString(category)
+    || !Number.isSafeInteger(price) || price < 0
     || !Number.isSafeInteger(stock) || stock < 0 || typeof featured !== 'boolean'
     || !Array.isArray(images) || images.length < 1 || images.length > 8 || !images.every(validImage)) return null
 
@@ -106,7 +108,10 @@ async function lockCategory(id, session) {
 
 export async function saveProduct(request, response) {
   const fields = productFields(request.body ?? {})
-  if (!fields) return response.status(400).json({ message: 'Enter a name, description, category, valid prices and stock, and 1 to 8 image URLs.' })
+  if (!fields) {
+    const protocol = process.env.NODE_ENV === 'production' ? 'HTTPS' : 'HTTP or HTTPS'
+    return response.status(400).json({ message: `Enter a name, description, category, valid prices and stock, and 1 to 8 ${protocol} image URLs.` })
+  }
 
   const { id } = request.params
   const version = request.body.version

@@ -93,7 +93,7 @@ export default function Home() {
 
       <ProductShelf title="Featured products" endpoint="/products?featured=true" />
       <ProductShelf title="New arrivals" endpoint="/products" emptyMessage="New products will appear here when they’re available." />
-      {recentProducts.length > 0 && <RecentProducts productIds={recentProducts} />}
+      {user && recentProducts.length > 0 && <RecentProducts productIds={recentProducts} />}
 
       {!user && !loading && (
         <section className="store-promo">

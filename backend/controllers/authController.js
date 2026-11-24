@@ -48,20 +48,14 @@ export async function register(request, response) {
   }
 
   const passwordHash = await bcrypt.hash(password, passwordCost)
-  let user
 
   try {
-    user = await User.create({ name: cleanName, email: cleanEmail, passwordHash })
+    await User.create({ name: cleanName, email: cleanEmail, passwordHash })
   } catch (error) {
-    if (error.code === 11000) {
-      return response.status(409).json({ message: 'An account already exists for that email.' })
-    }
-
-    throw error
+    if (error.code !== 11000) throw error
   }
 
-  setSessionCookie(response, await createSession(user.id))
-  response.status(201).json({ user: accountDetails(user) })
+  response.sendStatus(204)
 }
 
 export async function login(request, response) {

@@ -99,7 +99,7 @@ Open [Buyora](http://127.0.0.1:5173). The API health check is at [port 5000](htt
 2. Connect MongoDB Compass to the same database as the app. In the `users` collection, find the account by its exact email and set its `role` to `admin`.
 3. Sign in with that account and open **My account → Admin area**.
 
-Add categories before products. Enter product prices in rupees and add one image URL per line. A category can be deleted once its active products have been moved or archived. Reload a product before saving if its stock changed during an edit.
+Add categories before products. Enter product prices in rupees and add one image URL per line. Production requires HTTPS image URLs. If an older HTTP image has no HTTPS version, replace its URL before saving the product. A category can be deleted once its active products have been moved or archived. Reload a product before saving if its stock changed during an edit.
 
 In **Admin → Products**, choose **Archive** to hide a product from the store. Open **Archived**, select **Restore**, and confirm with **Restore product**. The original category is selected if it still exists. If it was deleted, choose a replacement category. Restoring keeps the product’s stock, past orders, and stock history.
 
@@ -116,8 +116,8 @@ Open a product from the **Active** or **Archived** view to see **Stock history**
 | Area | What to check |
 | --- | --- |
 | Catalog | Search by name, combine category and price filters, sort prices, and open a product. Test a search that returns no results. |
-| Account | Register, sign out and back in, and add, edit, or remove a delivery address. In **My account → Change password**, verify that the current device stays signed in and other sessions end. |
-| Cart and wishlist | Change quantities and reload the cart. Switch accounts in the same browser and verify that each account sees its own cart. Save a product to the wishlist and move it to the cart. Check that unavailable stock is flagged. |
+| Account | Register and then sign in. Add, edit, or remove a delivery address. In **My account → Change password**, verify that the current device stays signed in and other sessions end. |
+| Cart and wishlist | Change quantities and reload the cart while signed in. Sign out and verify the local cart and recently viewed list are cleared. Save a product to the wishlist and move it to the cart. Check that unavailable stock is flagged. |
 | Checkout | Use a saved address, add optional delivery instructions, place a Cash on Delivery order, and verify that the order and instructions appear in **My orders**. |
 | Admin products | Archive a product and verify it disappears from the storefront. Restore it from **Archived** and check that stock and history are preserved. Try restoring a product whose original category was deleted. |
 | Admin | Search and filter orders, print a packing slip, and check stock history after a cancellation or restocked return. Verify that marking delivery failed leaves stock reserved. Try the admin URL using a customer account. |
@@ -129,7 +129,7 @@ Use `http://127.0.0.1:5000` for all requests so Postman can reuse the login cook
 
 | Request | What to send or check |
 | --- | --- |
-| `POST /api/auth/register` | `name`, `email`, and `password`. Public registration creates customers. |
+| `POST /api/auth/register` | `name`, `email`, and `password`. Valid requests get the same empty `204` response for new and existing emails. Sign in separately. |
 | `POST /api/auth/login` and `GET /api/auth/me` | Sign in with `email` and `password`, then call the account endpoint. |
 | `GET /api/products?q=lamp&maxPrice=6000&sort=price-asc` | Price filters use rupees. The endpoint also supports category, featured status, and pagination. |
 | `POST /api/cart/quote` | Send `items` with a `productId` and `quantity` per line. Confirm current stock and total. |

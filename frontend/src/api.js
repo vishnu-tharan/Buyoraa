@@ -8,6 +8,28 @@ export const api = axios.create({
 })
 
 const recentProductsKey = 'buyora-recent-products'
+export const cartStoragePrefix = 'buyora-cart-'
+
+export function clearRecentProducts() {
+  try {
+    localStorage.removeItem(recentProductsKey)
+  } catch {
+    // Storage may be unavailable in this browser.
+  }
+}
+
+export function clearShoppingStorage() {
+  try {
+    localStorage.removeItem(recentProductsKey)
+    localStorage.removeItem('buyora-cart')
+    for (let index = localStorage.length - 1; index >= 0; index--) {
+      const key = localStorage.key(index)
+      if (key?.startsWith(cartStoragePrefix)) localStorage.removeItem(key)
+    }
+  } catch {
+    // Storage may be unavailable in this browser.
+  }
+}
 
 export function readRecentProducts() {
   try {

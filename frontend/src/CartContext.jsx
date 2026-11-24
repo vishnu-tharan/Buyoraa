@@ -1,6 +1,6 @@
 import { createContext, useContext, useLayoutEffect, useRef, useState } from 'react'
 import { useAuth } from './AuthContext.jsx'
-import { api } from './api.js'
+import { api, cartStoragePrefix } from './api.js'
 
 const CartContext = createContext(null)
 
@@ -38,7 +38,7 @@ function readCart(storageKey) {
 
 export function CartProvider({ children }) {
   const { user } = useAuth()
-  const storageKey = user?.id ? `buyora-cart-${user.id}` : ''
+  const storageKey = user?.id ? `${cartStoragePrefix}${user.id}` : ''
 
   return <AccountCart key={storageKey} storageKey={storageKey}>{children}</AccountCart>
 }
