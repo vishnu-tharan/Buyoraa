@@ -33,7 +33,8 @@ function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
   const { data, previousData, loading, error, retry } = useApi('/cart/quote', JSON.stringify({ items }))
   const quote = data ?? previousData
   const savedAddresses = user.addresses ?? []
-  const [addressId, setAddressId] = useState(savedAddresses[0]?._id ?? '')
+  const defaultAddress = savedAddresses.find(({ _id }) => _id === user.defaultAddressId) ?? savedAddresses[0]
+  const [addressId, setAddressId] = useState(defaultAddress?._id ?? '')
   const address = savedAddresses.find(({ _id }) => _id === addressId) ?? { country: 'Sri Lanka' }
   const attempt = useRef(existingKey)
   const inFlight = useRef(false)
@@ -103,7 +104,7 @@ function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
               <select className="checkout-select" value={addressId} onChange={(event) => setAddressId(event.target.value)}>
                 <option value="">Enter a new address</option>
                 {savedAddresses.map(({ _id, street, city }) => (
-                  <option key={_id} value={_id}>{street}, {city}</option>
+                  <option key={_id} value={_id}>{street}, {city}{_id === user.defaultAddressId ? ' (default)' : ''}</option>
                 ))}
               </select>
             </label>

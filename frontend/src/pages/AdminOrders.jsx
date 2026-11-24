@@ -45,6 +45,8 @@ export function AdminOrders() {
   const status = params.get('status') ?? ''
   const from = params.get('from') ?? ''
   const to = params.get('to') ?? ''
+  const exportParams = new URLSearchParams(params)
+  exportParams.delete('page')
 
   function applyFilters(event) {
     event.preventDefault()
@@ -57,7 +59,10 @@ export function AdminOrders() {
 
   return (
     <section>
-      <div className="page-heading"><h1>Orders</h1></div>
+      <div className="page-heading admin-page-heading">
+        <h1>Orders</h1>
+        {data && <a className="button button-outline" href={`/api/admin/orders/export?${exportParams}`} download>Download CSV</a>}
+      </div>
       <form className="admin-search" key={JSON.stringify([search, status, from, to])} onSubmit={applyFilters}>
         <label>
           Search orders

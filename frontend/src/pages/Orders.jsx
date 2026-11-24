@@ -8,6 +8,31 @@ import OrderSummary, { orderPaymentLabel, orderStatusLabels } from '../component
 import { formatPrice } from '../components/ProductGrid.jsx'
 
 const orderDate = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium' })
+const deliverySteps = ['pending', 'confirmed', 'shipped', 'delivered']
+
+function OrderProgress({ order }) {
+  const { orderStatus, paymentStatus } = order
+  if (orderStatus === 'cancelled') return null
+
+  // Returned COD orders were delivered only if payment was collected.
+  const currentStep = deliverySteps.indexOf(orderStatus)
+  const completedStep = orderStatus === 'returned' && paymentStatus === 'paid' ? 3 : 2
+
+  return (
+    <ol className="order-progress" aria-label="Delivery progress">
+      {deliverySteps.map((step, index) => (
+        <li
+          key={step}
+          aria-current={index === currentStep ? 'step' : undefined}
+          className={index <= (currentStep < 0 ? completedStep : currentStep) ? 'order-progress-reached' : undefined}
+        >
+          {orderStatusLabels[step]}
+          {index < currentStep || (currentStep < 0 && index <= completedStep) ? <span className="sr-only"> (completed)</span> : null}
+        </li>
+      ))}
+    </ol>
+  )
+}
 
 export function Orders() {
   const [params, setParams] = useSearchParams()
@@ -250,6 +275,7 @@ function OrderPage({ confirmation = false }) {
         <div className="checkout-panel">
           <h2>Order status</h2>
           <span className="stock-status my-0 w-fit">{orderStatusLabels[order.orderStatus]}</span>
+          <OrderProgress order={order} />
           {cancellationNotice && (
             <p className={cancellationError ? 'form-error' : 'text-sm'} role={cancellationError ? 'alert' : 'status'}>
               {cancelled ? 'Your order was cancelled.' : cancellationNotice.message}

@@ -24,6 +24,11 @@ router.param('productId', (request, response, next, productId) => {
   next()
 })
 
+router.get('/:productId', async (request, response) => {
+  const saved = await Wishlist.exists({ user: request.user.id, products: request.params.productId })
+  response.json({ saved: Boolean(saved) })
+})
+
 router.put('/:productId', async (request, response) => {
   const { productId } = request.params
   if (!(await Product.exists({ _id: productId, ...activeProducts }))) {

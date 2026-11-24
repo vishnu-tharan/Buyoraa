@@ -724,6 +724,15 @@ a.shopping-title:hover { color: var(--color-brand-red); text-decoration: underli
 
 .order-entry:hover { border-color: var(--color-brand-red); }
 .order-entry .stock-status { margin: 0; }
+.order-progress { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.25rem; }
+.order-progress li {
+  border-top: 0.25rem solid var(--color-brand-line);
+  padding-top: 0.45rem;
+  font-size: clamp(0.7rem, 2.5vw, 0.875rem);
+  text-align: center;
+}
+.order-progress .order-progress-reached { border-color: var(--color-brand-red); }
+.order-progress [aria-current="step"] { color: var(--color-brand-dark-red); font-weight: 800; }
 .order-confirmation { padding-block: 2rem; }
 .order-confirmation h1 { margin-bottom: 0.4rem; font-size: 2rem; font-weight: 800; }
 .account-settings { width: min(39rem, 100%); }

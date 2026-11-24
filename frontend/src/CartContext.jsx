@@ -3,20 +3,19 @@ import { useAuth } from './AuthContext.jsx'
 import { api, cartStoragePrefix } from './api.js'
 
 const CartContext = createContext(null)
+const guestCartKey = `${cartStoragePrefix}guest`
 
-function saveCart(storageKey, items) {
-  if (!storageKey) return
-
+function saveCart(storageKey, items, consumeGuest = false) {
   try {
     localStorage.setItem(storageKey, JSON.stringify(items))
+    if (consumeGuest) localStorage.removeItem(guestCartKey)
+    return true
   } catch {
-    // The cart still works for this visit when storage is unavailable.
+    return false
   }
 }
 
 function readCart(storageKey) {
-  if (!storageKey) return []
-
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey))
     if (!Array.isArray(saved)) return []
@@ -38,30 +37,50 @@ function readCart(storageKey) {
 
 export function CartProvider({ children }) {
   const { user } = useAuth()
-  const storageKey = user?.id ? `${cartStoragePrefix}${user.id}` : ''
+  const guestCart = useRef(null)
+  const storageKey = user?.id ? `${cartStoragePrefix}${user.id}` : guestCartKey
 
-  return <AccountCart key={storageKey} storageKey={storageKey}>{children}</AccountCart>
+  return <AccountCart key={storageKey} storageKey={storageKey} guestCart={guestCart}>{children}</AccountCart>
 }
 
-function AccountCart({ storageKey, children }) {
-  const [items, setItems] = useState(() => readCart(storageKey))
+function AccountCart({ storageKey, guestCart, children }) {
+  const isGuest = storageKey === guestCartKey
+  const [items, setItems] = useState(() => (isGuest ? guestCart.current : null) ?? readCart(storageKey))
   const latestItems = useRef(items)
   const active = useRef(false)
 
   useLayoutEffect(() => {
     active.current = true
+    if (!isGuest) {
+      const guestItems = guestCart.current ?? readCart(guestCartKey)
+      if (guestItems.length) {
+        const merged = new Map(readCart(storageKey).map((item) => [item.productId, item]))
+        for (const item of guestItems) {
+          const current = merged.get(item.productId)
+          if (current || merged.size < 50) {
+            merged.set(item.productId, { ...item, quantity: Math.min(99, (current?.quantity ?? 0) + item.quantity) })
+          }
+        }
+        const nextItems = [...merged.values()]
+        latestItems.current = nextItems
+        setItems(nextItems)
+        guestCart.current = null
+        saveCart(storageKey, nextItems, true)
+      }
+    }
     return () => { active.current = false }
-  }, [])
+  }, [guestCart, isGuest, storageKey])
 
   function updateCart(nextItems) {
     if (!active.current) return
     latestItems.current = nextItems
-    saveCart(storageKey, nextItems)
+    const saved = saveCart(storageKey, nextItems)
+    if (isGuest) guestCart.current = saved ? null : nextItems
     setItems(nextItems)
   }
 
   function addItem(product, { onlyIfMissing = false } = {}) {
-    if (!storageKey || !active.current) return 'Sign in to add items to your cart.'
+    if (!active.current) return 'Cart is unavailable. Try again.'
 
     const previous = latestItems.current
     const current = previous.find(({ productId }) => productId === product._id)
@@ -101,7 +120,7 @@ function AccountCart({ storageKey, children }) {
   }
 
   async function buyAgain(orderItems) {
-    if (!storageKey || !active.current) throw new Error('Sign in to add items to your cart.')
+    if (isGuest || !active.current) throw new Error('Sign in to add items to your cart.')
 
     const requestedItems = orderItems.map(({ product, quantity }) => ({ productId: product, quantity }))
     const { data } = await api.post('/cart/quote', { items: requestedItems })

@@ -29,6 +29,7 @@ const userSchema = new mongoose.Schema(
     role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
     phone: { type: String, trim: true, maxlength: 30, default: '' },
     addresses: [addressSchema],
+    defaultAddressId: mongoose.Schema.Types.ObjectId,
   },
   { timestamps: true },
 )

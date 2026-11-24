@@ -27,6 +27,7 @@ export function accountDetails(user) {
     role: user.role,
     phone: user.phone,
     addresses: user.addresses,
+    defaultAddressId: user.defaultAddressId ?? null,
   }
 }
 

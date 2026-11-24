@@ -63,11 +63,26 @@ router.patch('/addresses/:addressId', async (request, response) => {
   response.json({ user: accountDetails(user) })
 })
 
+router.patch('/addresses/:addressId/default', async (request, response) => {
+  const { addressId } = request.params
+  const user = await User.findOneAndUpdate(
+    { _id: request.user.id, 'addresses._id': addressId },
+    { $set: { defaultAddressId: addressId } },
+    updateOptions,
+  )
+  if (!user) return response.status(404).json({ message: 'Address not found.' })
+  response.json({ user: accountDetails(user) })
+})
+
 router.delete('/addresses/:addressId', async (request, response) => {
+  const addressId = new mongoose.Types.ObjectId(request.params.addressId)
   const user = await User.findByIdAndUpdate(
     request.user.id,
-    { $pull: { addresses: { _id: request.params.addressId } } },
-    updateOptions,
+    [{ $set: {
+      addresses: { $filter: { input: { $ifNull: ['$addresses', []] }, as: 'address', cond: { $ne: ['$$address._id', addressId] } } },
+      defaultAddressId: { $cond: [{ $eq: ['$defaultAddressId', addressId] }, '$$REMOVE', '$defaultAddressId'] },
+    } }],
+    { returnDocument: 'after', updatePipeline: true },
   )
   if (!user) return response.status(404).json({ message: 'Account not found.' })
   response.json({ user: accountDetails(user) })

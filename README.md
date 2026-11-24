@@ -107,7 +107,7 @@ Orders move from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. C
 
 If a shipped order is refused or cannot be delivered, mark it **Delivery failed**. Stock stays reserved until the items return. Once all items are received back from a failed delivery or a delivered order, mark it **Returned** and choose whether to restock them. Restock only if every item can be sold again. Recording a return leaves the payment record and collected sales total intact. Handle any refund separately.
 
-In **Admin → Orders**, search by order number, customer or recipient name, or phone number. Combine the search with status and date filters. Both dates are inclusive and use Sri Lanka time. Open an order to print a packing slip with its delivery address, instructions, items, and quantities.
+In **Admin → Orders**, search by order number, customer or recipient name, or phone number. Combine the search with status and date filters. Both dates are inclusive and use Sri Lanka time. Select **Download CSV** to export all orders matching the applied filters. Open an order to print a packing slip with its delivery address, instructions, items, and quantities.
 
 Open a product from the **Active** or **Archived** view to see **Stock history**. It records changes from product creation, manual stock edits, orders, cancellations, and restocked returns.
 
@@ -117,8 +117,8 @@ Open a product from the **Active** or **Archived** view to see **Stock history**
 | --- | --- |
 | Catalog | Search by name, combine category and price filters, sort prices, and open a product. Test a search that returns no results. |
 | Account | Register and then sign in. Add, edit, or remove a delivery address. In **My account → Change password**, verify that the current device stays signed in and other sessions end. |
-| Cart and wishlist | Change quantities and reload the cart while signed in. Sign out and verify the local cart and recently viewed list are cleared. Save a product to the wishlist and move it to the cart. Check that unavailable stock is flagged. |
-| Checkout | Use a saved address, add optional delivery instructions, place a Cash on Delivery order, and verify that the order and instructions appear in **My orders**. |
+| Cart and wishlist | Add items and change quantities as a guest, then sign in and check that the guest cart merges into the account cart. Sign out and verify that the local cart and recently viewed list are cleared. Save a product to the wishlist, reload its product page, and remove it there. |
+| Checkout | Set a default shipping address in **My account** and verify checkout selects it. Add optional delivery instructions, place a Cash on Delivery order, and check the order and its delivery progress in **My orders**. |
 | Admin products | Archive a product and verify it disappears from the storefront. Restore it from **Archived** and check that stock and history are preserved. Try restoring a product whose original category was deleted. |
 | Admin | Search and filter orders, print a packing slip, and check stock history after a cancellation or restocked return. Verify that marking delivery failed leaves stock reserved. Try the admin URL using a customer account. |
 | Build | From the project root, run `npm.cmd run build --prefix frontend`. With the development API running and Vite stopped, use `npm.cmd run preview --prefix frontend`. |

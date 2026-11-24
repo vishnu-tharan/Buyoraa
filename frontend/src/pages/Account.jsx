@@ -263,7 +263,7 @@ function SavedAddresses({ user }) {
 
     try {
       const { data } = await api.request({ method, url: path, data: address })
-      updateAccount(data.user.id, { addresses: data.user.addresses })
+      updateAccount(data.user.id, { addresses: data.user.addresses, defaultAddressId: data.user.defaultAddressId })
       setEditing(null)
       setNotice({ message })
     } catch (requestError) {
@@ -293,9 +293,13 @@ function SavedAddresses({ user }) {
             <div className="min-w-0">
               <p className="break-words font-semibold">{address.street}</p>
               <p className="break-words text-sm text-stone-600">{address.city}, {address.postalCode}, {address.country}</p>
+              {user.defaultAddressId === address._id && <p className="text-sm font-semibold mt-1">Default shipping address</p>}
             </div>
             <div className="flex flex-wrap gap-3">
               <button className="text-link" type="button" disabled={saving} onClick={() => setEditing(address._id)}>Edit</button>
+              {user.defaultAddressId !== address._id && (
+                <button className="text-link" type="button" disabled={saving} onClick={() => updateAddress('patch', `/users/addresses/${address._id}/default`, undefined, 'Default shipping address updated.')}>Make default</button>
+              )}
               <button className="text-link" type="button" disabled={saving} onClick={() => updateAddress('delete', `/users/addresses/${address._id}`, undefined, 'Address removed.')}>Remove</button>
             </div>
           </li>

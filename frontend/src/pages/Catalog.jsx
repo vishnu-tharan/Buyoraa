@@ -231,45 +231,19 @@ function ProductActions({ product, catalogReturn }) {
   const { user, loading } = useAuth()
   const { addItem } = useCart()
   const [notice, setNotice] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
 
   function addToCart() {
     const message = addItem(product)
     setNotice(message ? { message, error: true } : { message: 'Added to your cart.' })
   }
 
-  async function saveProduct() {
-    setSaving(true)
-    setNotice(null)
-    try {
-      await api.put(`/wishlist/${product._id}`)
-      setSaved(true)
-      setNotice({ message: 'Saved to your wishlist.' })
-    } catch (error) {
-      setNotice({ error: true, message: errorMessage(error, 'We couldn’t save this product. Try again.') })
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
     <div className="mt-5">
       <div className="flex flex-wrap gap-3">
-        {!loading && !user && product.stock > 0 ? (
-          <Link to="/login" state={{ from: `/products/${product._id}`, catalogReturn }} className="button button-red">
-            <ShoppingBag size={17} aria-hidden="true" /> Sign in to add to cart
-          </Link>
-        ) : (
-          <button type="button" className="button button-red" disabled={loading || product.stock === 0} onClick={addToCart}>
-            <ShoppingBag size={17} aria-hidden="true" /> Add to cart
-          </button>
-        )}
-        {!loading && user && (
-          <button type="button" className="button button-outline" disabled={saving || saved} onClick={saveProduct}>
-            <Heart size={17} aria-hidden="true" /> {saved ? 'Saved to wishlist' : 'Save to wishlist'}
-          </button>
-        )}
+        <button type="button" className="button button-red" disabled={loading || product.stock === 0} onClick={addToCart}>
+          <ShoppingBag size={17} aria-hidden="true" /> Add to cart
+        </button>
+        {!loading && user && <WishlistButton productId={product._id} onNotice={setNotice} />}
         {!loading && !user && (
           <Link to="/login" state={{ from: `/products/${product._id}`, catalogReturn }} className="button button-outline">
             <Heart size={17} aria-hidden="true" /> Sign in to save
@@ -279,5 +253,35 @@ function ProductActions({ product, catalogReturn }) {
       {notice?.error && <p className="form-error mt-3" role="alert">{notice.message}</p>}
       {notice && !notice.error && <Toast notice={notice} onClose={setNotice} />}
     </div>
+  )
+}
+
+function WishlistButton({ productId, onNotice }) {
+  const path = `/wishlist/${productId}`
+  const { data, loading, error, retry } = useApi(path)
+  const [saving, setSaving] = useState(false)
+  const [changed, setChanged] = useState(null)
+  const saved = changed ?? data?.saved ?? false
+
+  async function toggle() {
+    setSaving(true)
+    onNotice(null)
+    try {
+      if (saved) await api.delete(path)
+      else await api.put(path)
+      setChanged(!saved)
+      onNotice({ message: saved ? 'Removed from your wishlist.' : 'Saved to your wishlist.' })
+    } catch (requestError) {
+      onNotice({ error: true, message: errorMessage(requestError, 'We couldn’t update your wishlist. Try again.') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <button type="button" className="button button-outline" disabled={loading || saving} onClick={error ? retry : toggle}>
+      <Heart size={17} aria-hidden="true" fill={saved ? 'currentColor' : 'none'} />
+      {loading ? 'Checking wishlist…' : error ? 'Retry wishlist' : saved ? 'Remove from wishlist' : 'Save to wishlist'}
+    </button>
   )
 }

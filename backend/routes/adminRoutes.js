@@ -4,7 +4,7 @@ import { adminOverview, adminUsers } from '../controllers/adminController.js'
 import {
   adminProduct, adminProducts, adminStockHistory, deleteCategory, deleteProduct, restoreProduct, saveCategory, saveProduct,
 } from '../controllers/adminCatalogController.js'
-import { adminOrder, adminOrders, updateOrderStatus } from '../controllers/adminOrdersController.js'
+import { adminOrder, adminOrders, exportAdminOrders, updateOrderStatus } from '../controllers/adminOrdersController.js'
 import { requireAdmin, requireUser } from '../middleware/auth.js'
 
 const router = Router()
@@ -28,6 +28,7 @@ router.post('/categories', saveCategory)
 router.put('/categories/:id', saveCategory)
 router.delete('/categories/:id', deleteCategory)
 router.get('/orders', adminOrders)
+router.get('/orders/export', exportAdminOrders)
 router.get('/orders/:id', adminOrder)
 router.patch('/orders/:id/status', updateOrderStatus)
 

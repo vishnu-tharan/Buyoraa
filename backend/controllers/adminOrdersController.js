@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import mongoose from 'mongoose'
 import Order, { orderStatuses } from '../models/Order.js'
 import User from '../models/User.js'
@@ -36,20 +38,18 @@ async function orderSearch(term) {
   return { $or: matches }
 }
 
-export async function adminOrders(request, response) {
-  const { status, q = '', from, to } = request.query
-  const page = readPage(request.query.page)
-  if (!page || (status !== undefined && !orderStatuses.includes(status))) {
-    return response.status(400).json({ message: 'Choose a valid page and order status.' })
+async function readOrderFilters({ status, q = '', from, to }) {
+  if (status !== undefined && !orderStatuses.includes(status)) {
+    return { message: 'Choose a valid order status.' }
   }
   if (typeof q !== 'string' || q.length > 100) {
-    return response.status(400).json({ message: 'Use up to 100 characters to search orders.' })
+    return { message: 'Use up to 100 characters to search orders.' }
   }
 
   const start = from === undefined ? undefined : readOrderDate(from)
   const end = to === undefined ? undefined : readOrderDate(to)
   if (start === null || end === null || (start && end && start > end)) {
-    return response.status(400).json({ message: 'Choose valid dates with the start date on or before the end date.' })
+    return { message: 'Choose valid dates with the start date on or before the end date.' }
   }
 
   const filters = status ? { orderStatus: status } : {}
@@ -60,19 +60,58 @@ export async function adminOrders(request, response) {
   }
   const term = q.trim()
   if (term) Object.assign(filters, await orderSearch(term))
+  return { filters }
+}
+
+function orderListQuery(filters) {
+  return Order.find(filters)
+    .select('user createdAt orderStatus paymentStatus totalAmount')
+    .sort({ createdAt: -1, _id: -1 })
+    .lean()
+}
+
+export async function adminOrders(request, response) {
+  const page = readPage(request.query.page)
+  if (!page) return response.status(400).json({ message: 'Choose a valid page.' })
+  const { filters, message } = await readOrderFilters(request.query)
+  if (message) return response.status(400).json({ message })
+
   const pageSize = 20
   const [orders, total] = await Promise.all([
-    Order.find(filters)
-      .select('user createdAt orderStatus paymentStatus totalAmount')
-      .populate('user', 'name email')
-      .sort({ createdAt: -1, _id: -1 })
-      .skip((page - 1) * pageSize)
-      .limit(pageSize)
-      .lean(),
+    orderListQuery(filters).populate('user', 'name email').skip((page - 1) * pageSize).limit(pageSize),
     Order.countDocuments(filters),
   ])
 
   response.json({ orders, page, pageSize, total })
+}
+
+function csvCell(value) {
+  const text = String(value ?? '')
+  // Spreadsheet programs may interpret these cells as formulas even when quoted.
+  const safe = /^[\t\r\n]|^\s*[=+@-]/u.test(text) ? `'${text}` : text
+  return `"${safe.replaceAll('"', '""')}"`
+}
+
+async function* orderCsv(filters) {
+  const cursor = orderListQuery(filters).populate('user', 'name').cursor({ batchSize: 100 })
+  try {
+    yield '\uFEFFOrder ID,Customer,Placed (UTC),Order status,Payment status,Total (LKR)\r\n'
+    for await (const order of cursor) {
+      const row = [order._id, order.user?.name, order.createdAt.toISOString(), order.orderStatus,
+        order.paymentStatus, (order.totalAmount / 100).toFixed(2)]
+      yield `${row.map(csvCell).join(',')}\r\n`
+    }
+  } finally {
+    await cursor.close()
+  }
+}
+
+export async function exportAdminOrders(request, response) {
+  const { filters, message } = await readOrderFilters(request.query)
+  if (message) return response.status(400).json({ message })
+
+  response.attachment('buyora-orders.csv').type('text/csv; charset=utf-8')
+  await pipeline(Readable.from(orderCsv(filters)), response)
 }
 
 export async function adminOrder(request, response) {
