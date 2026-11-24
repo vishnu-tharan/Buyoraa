@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import axios from 'axios'
 
 export const api = axios.create({
@@ -61,6 +61,7 @@ export function errorMessage(error, fallback) {
 export function useApi(path, jsonBody) {
   const [result, setResult] = useState(null)
   const [attempt, setAttempt] = useState(0)
+  const retry = useCallback(() => setAttempt((previousAttempt) => previousAttempt + 1), [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -89,6 +90,6 @@ export function useApi(path, jsonBody) {
     previousData: result?.path === path ? result.data : undefined,
     error: currentResult?.error,
     loading: !currentResult,
-    retry: () => setAttempt((previousAttempt) => previousAttempt + 1),
+    retry,
   }
 }

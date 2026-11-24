@@ -1,6 +1,6 @@
 import { Heart, Search, ShoppingBag, UserRound } from 'lucide-react'
 import { useEffect } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../AuthContext.jsx'
 import { useCart } from '../CartContext.jsx'
 
@@ -10,6 +10,25 @@ export function BrandLink() {
       <span className="brand-icon"><ShoppingBag size={19} aria-hidden="true" /></span>
       Buyora
     </Link>
+  )
+}
+
+export function StoreSearch() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const search = location.pathname === '/products' ? new URLSearchParams(location.search).get('q') ?? '' : ''
+
+  function submit(event) {
+    event.preventDefault()
+    const query = new FormData(event.currentTarget).get('q').trim()
+    navigate(query ? `/products?${new URLSearchParams({ q: query })}` : '/products')
+  }
+
+  return (
+    <form key={location.pathname + location.search} className="store-search" role="search" aria-label="Store search" onSubmit={submit}>
+      <input type="search" name="q" aria-label="Search products" placeholder="Search products" maxLength={100} defaultValue={search} />
+      <button type="submit" aria-label="Submit product search"><Search size={18} aria-hidden="true" /></button>
+    </form>
   )
 }
 
@@ -27,10 +46,8 @@ function Navbar() {
           <NavLink to="/products" className={navClass}>Shop</NavLink>
           <Link to="/#categories" className="nav-link">Categories</Link>
         </div>
+        <StoreSearch />
         <div className="nav-actions">
-          <Link to="/products#search" className="account-link" aria-label="Search products" title="Search products">
-            <Search size={18} aria-hidden="true" />
-          </Link>
           <NavLink to="/wishlist" className="account-link" aria-label="Wishlist" title="Wishlist">
             <Heart size={18} aria-hidden="true" />
           </NavLink>

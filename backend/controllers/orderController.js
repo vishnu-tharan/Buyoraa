@@ -54,7 +54,10 @@ export async function changeOrderStatus({ orderId, status, customerId, restock }
       }
 
       order.orderStatus = status
-      if (status === 'delivered') order.paymentStatus = 'paid'
+      if (status === 'delivered') {
+        order.paymentStatus = 'paid'
+        order.paidAt = new Date()
+      }
       if (returning) order.returnRestocked = restock
       await order.save({ session })
 

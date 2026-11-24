@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowRight, ShoppingBag } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, Banknote, ClipboardList, House, Laptop, Shirt, ShoppingBag, Tags, Tent, Truck } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { readRecentProducts, useApi } from '../api.js'
@@ -7,6 +7,12 @@ import { Loading, PageMessage } from '../components/Feedback.jsx'
 import ProductGrid, { ProductGridSkeleton } from '../components/ProductGrid.jsx'
 
 const heroImage = 'https://images.unsplash.com/photo-1760565030282-8fb986077e0d?auto=format&fit=crop&w=1200&q=82'
+const categoryIcons = new Map([
+  ['home-and-living', House],
+  ['electronics', Laptop],
+  ['style', Shirt],
+  ['travel-and-outdoors', Tent],
+])
 
 function CategoryLinks() {
   const { data, error, loading, retry } = useApi('/categories')
@@ -17,12 +23,16 @@ function CategoryLinks() {
 
   return (
     <div className="category-grid">
-      {data.categories.map(({ _id, name, slug }) => (
-        <Link key={_id} to={`/products?category=${encodeURIComponent(slug)}`} className="category-link">
-          {name}
-          <ArrowRight size={17} aria-hidden="true" />
-        </Link>
-      ))}
+      {data.categories.map(({ _id, name, slug }) => {
+        const Icon = categoryIcons.get(slug) ?? Tags
+        return (
+          <Link key={_id} to={`/products?category=${encodeURIComponent(slug)}`} className="category-link">
+            <span className="category-icon"><Icon size={20} aria-hidden="true" /></span>
+            <span className="category-name">{name}</span>
+            <ArrowRight className="category-arrow" size={16} aria-hidden="true" />
+          </Link>
+        )
+      })}
     </div>
   )
 }
@@ -85,6 +95,12 @@ export default function Home() {
           />
         </div>
       </section>
+
+      <ul className="trust-strip" aria-label="Shopping benefits">
+        <li><Banknote size={21} aria-hidden="true" /><span>Cash on Delivery</span></li>
+        <li><Truck size={21} aria-hidden="true" /><span>Flat LKR 350 Delivery</span></li>
+        <li><ClipboardList size={21} aria-hidden="true" /><span>Order Tracking</span></li>
+      </ul>
 
       <section id="categories" className="home-section">
         <div className="section-heading"><h2>Shop by category</h2></div>

@@ -1,16 +1,18 @@
 import { ShoppingBag, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { api, errorMessage, useApi } from '../api.js'
+import { errorMessage } from '../api.js'
 import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage, Toast } from '../components/Feedback.jsx'
-import { formatPrice, ProductImage } from '../components/ProductGrid.jsx'
+import { formatPrice, ProductImage, useWishlist } from '../components/ProductGrid.jsx'
 
 export default function Wishlist() {
-  const { data, error, loading, retry } = useApi('/wishlist')
+  const { products, error, loading, retry, changeSaved } = useWishlist()
   const { addItem } = useCart()
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState(null)
+
+  useEffect(() => { retry() }, [retry])
 
   async function removeProduct(product, moveToCart = false) {
     setNotice(null)
@@ -25,9 +27,8 @@ export default function Wishlist() {
 
     setPending(true)
     try {
-      await api.delete(`/wishlist/${product._id}`)
+      await changeSaved(product._id, false)
       setNotice({ message: moveToCart ? 'Moved to your cart.' : 'Removed from your wishlist.' })
-      retry()
     } catch {
       const message = moveToCart
         ? 'The item is in your cart. We couldn’t remove it from your wishlist. Try again.'
@@ -45,12 +46,12 @@ export default function Wishlist() {
       {notice && !notice.error && <Toast notice={notice} onClose={setNotice} />}
       {loading && <Loading label="Loading saved products…" />}
       {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load your wishlist.')}</PageMessage>}
-      {data?.products.length === 0 && (
+      {products?.length === 0 && (
         <PageMessage linkTo="/products" linkLabel="Browse products">Your wishlist is empty.</PageMessage>
       )}
-      {data?.products.length > 0 && (
+      {products?.length > 0 && (
         <ul className="shopping-list" aria-label="Saved products">
-          {data.products.map((product) => (
+          {products.map((product) => (
             <li className="shopping-row" key={product._id}>
               <div className="shopping-image">
                 <ProductImage source={product.images[0]} alt="" />

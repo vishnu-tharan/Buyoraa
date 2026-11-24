@@ -3,10 +3,12 @@ import { Link, NavLink, Outlet, useSearchParams } from 'react-router'
 import { errorMessage, useApi } from '../api.js'
 import { Loading, PageMessage, Pagination } from '../components/Feedback.jsx'
 import { formatPrice } from '../components/ProductGrid.jsx'
-import { BrandLink } from '../components/StoreLayout.jsx'
+import { BrandLink, StoreSearch } from '../components/StoreLayout.jsx'
 import { AdminOrdersTable } from './AdminOrders.jsx'
 
 const dateFormat = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium' })
+const salesDayFormat = new Intl.DateTimeFormat('en-LK', { weekday: 'short', timeZone: 'Asia/Colombo' })
+const compactSales = new Intl.NumberFormat('en-LK', { notation: 'compact', maximumFractionDigits: 1 })
 
 const adminLinks = [
   { path: '/admin', label: 'Overview', Icon: LayoutDashboard },
@@ -33,6 +35,7 @@ export function AdminLayout() {
     <div className="shell admin-layout">
       <header className="admin-header">
         <BrandLink />
+        <StoreSearch />
         <Link to="/account" className="text-link">My account</Link>
       </header>
       <div className="admin-workspace">
@@ -40,6 +43,46 @@ export function AdminLayout() {
         <main className="min-w-0"><Outlet /></main>
       </div>
     </div>
+  )
+}
+
+function RestockNotice({ count, products }) {
+  return (
+    <section className="checkout-panel">
+      <h2>Needs restocking</h2>
+      {count ? (
+        <>
+          <p className="text-sm">{count} {count === 1 ? 'product has' : 'products have'} 5 units or fewer.</p>
+          <ul className="order-lines">
+            {products.map(({ _id, name, stock }) => (
+              <li key={_id}><Link to={`/admin/products/${_id}`} className="text-link">{name}</Link><span>{stock === 0 ? 'Sold out' : `${stock} left`}</span></li>
+            ))}
+          </ul>
+          {count > products.length && <Link to="/admin/products" className="text-link">View products</Link>}
+        </>
+      ) : <p className="text-sm">All active products have more than 5 units.</p>}
+    </section>
+  )
+}
+
+function SalesChart({ sales }) {
+  const peak = Math.max(1, ...sales.map(({ revenue }) => revenue))
+
+  return (
+    <section className="checkout-panel">
+      <h2>Collected sales · Last 7 days</h2>
+      <p className="text-sm text-stone-600">LKR · Sri Lanka time</p>
+      <ol className="sales-chart" aria-label="Daily collected sales">
+        {sales.map(({ date, revenue }) => (
+          <li key={date} title={`${date}: ${formatPrice(revenue)}`}>
+            <span aria-hidden="true" className="sales-chart-amount">{compactSales.format(revenue / 100)}</span>
+            <span aria-hidden="true" className="sales-chart-track"><span style={{ height: `${revenue ? Math.max(4, 100 * revenue / peak) : 0}%` }} /></span>
+            <time dateTime={date}>{salesDayFormat.format(new Date(date))}</time>
+            <span className="sr-only">{date}: {formatPrice(revenue)}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }
 
@@ -59,6 +102,10 @@ export default function AdminOverview() {
             <div><dt>Orders</dt><dd>{data.orderCount}</dd></div>
             <div><dt>Collected sales</dt><dd>{formatPrice(data.revenue)}</dd></div>
           </dl>
+          <div className="admin-insights">
+            <RestockNotice count={data.lowStockCount} products={data.lowStockProducts} />
+            <SalesChart sales={data.sales} />
+          </div>
           <div className="section-heading mt-6">
             <h2>Recent orders</h2>
             <Link to="/admin/orders" className="text-link">View all orders</Link>

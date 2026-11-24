@@ -4,7 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
 import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage, Pagination } from '../components/Feedback.jsx'
-import OrderSummary, { orderPaymentLabel, orderStatusLabels } from '../components/OrderSummary.jsx'
+import OrderSummary, { orderPaymentLabel, orderStatusLabels, OrderStatusBadge } from '../components/OrderSummary.jsx'
 import { formatPrice } from '../components/ProductGrid.jsx'
 
 const orderDate = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium' })
@@ -91,7 +91,7 @@ export function Orders() {
                   <h2>Order #{order._id.slice(-8).toUpperCase()}</h2>
                   <p className="text-sm text-stone-600">{orderDate.format(new Date(order.createdAt))}</p>
                 </div>
-                <span className="stock-status">{orderStatusLabels[order.orderStatus]}</span>
+                <OrderStatusBadge status={order.orderStatus} />
                 <span className="font-bold">{formatPrice(order.totalAmount)}</span>
               </Link>
             </li>
@@ -252,6 +252,7 @@ function OrderPage({ confirmation = false }) {
         {title === 'Order placed' && <CircleCheck size={44} className="mx-auto mb-3 text-brand-red" aria-hidden="true" />}
         <h1>{title}</h1>
         <p>Order {orderNumber} · {formatPrice(order.totalAmount)}</p>
+        <OrderProgress order={order} />
         {order.paymentStatus === 'pending' && <p>{paymentLabel === 'No payment due' ? 'No payment is due.' : 'Payment is due on delivery.'}</p>}
         <CopyOrderNumber key={order._id} orderNumber={orderNumber} />
         <div className="mt-4 flex flex-wrap justify-center gap-3">
@@ -274,7 +275,7 @@ function OrderPage({ confirmation = false }) {
       <div className="cart-layout">
         <div className="checkout-panel">
           <h2>Order status</h2>
-          <span className="stock-status my-0 w-fit">{orderStatusLabels[order.orderStatus]}</span>
+          <OrderStatusBadge status={order.orderStatus} />
           <OrderProgress order={order} />
           {cancellationNotice && (
             <p className={cancellationError ? 'form-error' : 'text-sm'} role={cancellationError ? 'alert' : 'status'}>

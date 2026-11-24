@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
 import { Loading, PageMessage, Pagination } from '../components/Feedback.jsx'
-import OrderSummary, { orderPaymentLabel, orderStatusLabels } from '../components/OrderSummary.jsx'
+import OrderSummary, { orderPaymentLabel, orderStatusLabels, OrderStatusBadge } from '../components/OrderSummary.jsx'
 import { formatPrice } from '../components/ProductGrid.jsx'
 
 const dateFormat = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium', timeZone: 'Asia/Colombo' })
@@ -28,7 +28,7 @@ export function AdminOrdersTable({ orders }) {
               <td><Link className="text-link" to={`/admin/orders/${order._id}`}>{orderNumber(order._id)}</Link></td>
               <td>{order.user?.name ?? 'Customer unavailable'}</td>
               <td>{dateFormat.format(new Date(order.createdAt))}</td>
-              <td><span className="stock-status my-0">{orderStatusLabels[order.orderStatus]}</span></td>
+              <td><OrderStatusBadge status={order.orderStatus} /></td>
               <td>{formatPrice(order.totalAmount)}</td>
             </tr>
           ))}
@@ -200,7 +200,10 @@ export function AdminOrderDetails() {
       <div className="page-heading admin-page-heading">
         <div>
           <h1>Order {orderNumber(order._id)}</h1>
-          <p>{dateFormat.format(new Date(order.createdAt))} · {orderStatusLabels[order.orderStatus]}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p>{dateFormat.format(new Date(order.createdAt))}</p>
+            <OrderStatusBadge status={order.orderStatus} />
+          </div>
         </div>
         {canPrint && (
           <button className="button button-outline" type="button" onClick={() => window.print()}>Print packing slip</button>

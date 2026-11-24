@@ -111,11 +111,14 @@ In **Admin → Orders**, search by order number, customer or recipient name, or 
 
 Open a product from the **Active** or **Archived** view to see **Stock history**. It records changes from product creation, manual stock edits, orders, cancellations, and restocked returns.
 
+The admin overview shows up to five active products that have five units or fewer and the total number that need restocking. The seven-day chart groups collected sales by payment date in Sri Lanka time. Older paid orders without a recorded payment date use their last update date.
+
 ## Verify the app
 
 | Area | What to check |
 | --- | --- |
 | Catalog | Search by name, combine category and price filters, sort prices, and open a product. Test a search that returns no results. |
+| Reviews | Open a delivered product as its buyer. Save, edit, and remove a review, and verify the product card rating updates. Accounts without a delivered purchase cannot review the product. |
 | Account | Register and then sign in. Add, edit, or remove a delivery address. In **My account → Change password**, verify that the current device stays signed in and other sessions end. |
 | Cart and wishlist | Add items and change quantities as a guest, then sign in and check that the guest cart merges into the account cart. Sign out and verify that the local cart and recently viewed list are cleared. Save a product to the wishlist, reload its product page, and remove it there. |
 | Checkout | Set a default shipping address in **My account** and verify checkout selects it. Add optional delivery instructions, place a Cash on Delivery order, and check the order and its delivery progress in **My orders**. |

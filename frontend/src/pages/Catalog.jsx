@@ -5,7 +5,7 @@ import { api, errorMessage, rememberProduct, useApi } from '../api.js'
 import { useAuth } from '../AuthContext.jsx'
 import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage, Toast } from '../components/Feedback.jsx'
-import ProductGrid, { formatPrice, ProductGridSkeleton, ProductImage } from '../components/ProductGrid.jsx'
+import ProductGrid, { formatPrice, ProductGridSkeleton, ProductImage, ProductRating, WishlistToggle } from '../components/ProductGrid.jsx'
 
 function pageLink(params, page) {
   const nextParams = new URLSearchParams(params)
@@ -191,20 +191,25 @@ function ProductInformation({ product, relatedProducts, catalogReturn }) {
 
   const available = product.stock > 0
   const StockIcon = available ? PackageCheck : PackageX
+  const categoryPath = product.category ? `/products?category=${encodeURIComponent(product.category.slug)}` : '/products'
 
   return (
     <article>
-      <Link to={catalogReturn} className="text-link mb-5">
-        <ChevronLeft size={17} aria-hidden="true" /> Back to products
-      </Link>
+      <nav className="product-breadcrumbs" aria-label="Breadcrumb">
+        <ol>
+          <li><Link to="/">Home</Link></li>
+          <li><Link to={categoryPath}>{product.category?.name ?? 'Products'}</Link></li>
+          <li aria-current="page">{product.name}</li>
+        </ol>
+      </nav>
+      {catalogReturn !== '/products' && catalogReturn !== categoryPath && (
+        <Link to={catalogReturn} className="text-link mb-5">
+          <ChevronLeft size={17} aria-hidden="true" /> Back to results
+        </Link>
+      )}
       <div className="product-detail">
         <ProductPhotos product={product} />
         <div className="product-detail-copy">
-          {product.category && (
-            <Link className="text-link" to={`/products?category=${encodeURIComponent(product.category.slug)}`}>
-              {product.category.name}
-            </Link>
-          )}
           <h1>{product.name}</h1>
           <p className="product-price">{formatPrice(product.price)}</p>
           <p className="stock-status">
@@ -215,6 +220,7 @@ function ProductInformation({ product, relatedProducts, catalogReturn }) {
           <ProductActions product={product} catalogReturn={catalogReturn} />
         </div>
       </div>
+      <ProductReviews product={product} />
       {relatedProducts.length > 0 && (
         <section className="home-section" aria-labelledby="related-products-heading">
           <div className="section-heading">
@@ -243,7 +249,7 @@ function ProductActions({ product, catalogReturn }) {
         <button type="button" className="button button-red" disabled={loading || product.stock === 0} onClick={addToCart}>
           <ShoppingBag size={17} aria-hidden="true" /> Add to cart
         </button>
-        {!loading && user && <WishlistButton productId={product._id} onNotice={setNotice} />}
+        {!loading && user && <WishlistToggle product={product} />}
         {!loading && !user && (
           <Link to="/login" state={{ from: `/products/${product._id}`, catalogReturn }} className="button button-outline">
             <Heart size={17} aria-hidden="true" /> Sign in to save
@@ -256,32 +262,106 @@ function ProductActions({ product, catalogReturn }) {
   )
 }
 
-function WishlistButton({ productId, onNotice }) {
-  const path = `/wishlist/${productId}`
+const reviewDate = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium' })
+
+function ProductReviews({ product }) {
+  const { user } = useAuth()
+  const [page, setPage] = useState(1)
+  const [notice, setNotice] = useState('')
+  const path = `/products/${product._id}/reviews`
+  const { data, previousData, loading, error, retry } = useApi(`${path}?page=${page}`)
+  const rating = (data ?? previousData)?.rating ?? (!data && !previousData ? product.rating : null)
+
+  function reviewChanged(message) {
+    setNotice(message)
+    if (page === 1) retry()
+    else setPage(1)
+  }
+
+  return (
+    <section className="home-section product-reviews" aria-labelledby="product-reviews-title">
+      <div className="section-heading">
+        <h2 id="product-reviews-title">Customer reviews</h2>
+        <ProductRating rating={rating} />
+      </div>
+      {user && <MyReview path={`${path}/mine`} onChange={reviewChanged} />}
+      {notice && <p className="mt-3 text-sm" role="status">{notice}</p>}
+      {loading && <Loading label="Loading reviews…" />}
+      {error && <PageMessage error onRetry={retry}>We couldn’t load reviews.</PageMessage>}
+      {data?.total === 0 && <PageMessage>No customer reviews yet.</PageMessage>}
+      {data?.reviews.length > 0 && (
+        <ul className="review-list">
+          {data.reviews.map(({ _id, stars, comment, createdAt }) => (
+            <li className="checkout-panel" key={_id}>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <strong>{stars} out of 5 stars</strong><span className="text-sm">Verified purchase</span>
+                <time className="text-sm text-stone-600" dateTime={createdAt}>{reviewDate.format(new Date(createdAt))}</time>
+              </div>
+              <p className="whitespace-pre-wrap wrap-anywhere">{comment}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {data && (page > 1 || page * data.pageSize < data.total) && (
+        <nav className="pagination" aria-label="Review pages">
+          {page > 1 && <button type="button" className="button button-outline" onClick={() => setPage(page - 1)}>Previous</button>}
+          <span>Page {page}</span>
+          {page < 1000 && page * data.pageSize < data.total && <button type="button" className="button button-outline" onClick={() => setPage(page + 1)}>Next</button>}
+        </nav>
+      )}
+    </section>
+  )
+}
+
+function MyReview({ path, onChange }) {
   const { data, loading, error, retry } = useApi(path)
   const [saving, setSaving] = useState(false)
-  const [changed, setChanged] = useState(null)
-  const saved = changed ?? data?.saved ?? false
+  const [failure, setFailure] = useState('')
 
-  async function toggle() {
+  async function updateReview(method, review) {
     setSaving(true)
-    onNotice(null)
+    setFailure('')
     try {
-      if (saved) await api.delete(path)
-      else await api.put(path)
-      setChanged(!saved)
-      onNotice({ message: saved ? 'Removed from your wishlist.' : 'Saved to your wishlist.' })
+      await api.request({ method, url: path, data: review })
+      onChange(method === 'delete' ? 'Review removed.' : 'Review saved.')
+      retry()
     } catch (requestError) {
-      onNotice({ error: true, message: errorMessage(requestError, 'We couldn’t update your wishlist. Try again.') })
+      setFailure(errorMessage(requestError, 'We couldn’t update your review. Try again.'))
     } finally {
       setSaving(false)
     }
   }
 
+  function submit(event) {
+    event.preventDefault()
+    const fields = new FormData(event.currentTarget)
+    updateReview('put', { stars: Number(fields.get('stars')), comment: fields.get('comment') })
+  }
+
+  if (loading) return null
+  if (error) return <PageMessage error onRetry={retry}>We couldn’t check whether you can review this product.</PageMessage>
+  if (!data?.eligible) return <p className="mb-4 text-sm text-stone-600">You can review this product after receiving your order.</p>
+  const { review } = data
+
   return (
-    <button type="button" className="button button-outline" disabled={loading || saving} onClick={error ? retry : toggle}>
-      <Heart size={17} aria-hidden="true" fill={saved ? 'currentColor' : 'none'} />
-      {loading ? 'Checking wishlist…' : error ? 'Retry wishlist' : saved ? 'Remove from wishlist' : 'Save to wishlist'}
-    </button>
+    <form className="checkout-panel mb-4" onSubmit={submit}>
+      <h3 className="font-bold">{review ? 'Your review' : 'Write a review'}</h3>
+      <fieldset className="account-form" disabled={saving}>
+        <label>Rating
+          <select className="checkout-select" name="stars" defaultValue={review?.stars ?? ''} required>
+            <option value="" disabled>Choose a rating</option>
+            {[5, 4, 3, 2, 1].map((stars) => <option key={stars} value={stars}>{stars} {stars === 1 ? 'star' : 'stars'}</option>)}
+          </select>
+        </label>
+        <label className="col-span-full">Review
+          <textarea name="comment" rows={3} maxLength={1000} defaultValue={review?.comment ?? ''} required />
+        </label>
+      </fieldset>
+      {failure && <p className="form-error" role="alert">{failure}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" className="button button-red" disabled={saving}>Save review</button>
+        {review && <button type="button" className="button button-outline" disabled={saving} onClick={() => updateReview('delete')}>Remove review</button>}
+      </div>
+    </form>
   )
 }

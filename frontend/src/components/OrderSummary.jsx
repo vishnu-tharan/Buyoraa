@@ -16,6 +16,10 @@ export function orderPaymentLabel({ orderStatus, paymentStatus }) {
   return 'Payment pending'
 }
 
+export function OrderStatusBadge({ status }) {
+  return <span className="order-status-badge" data-status={status}>{orderStatusLabels[status]}</span>
+}
+
 export default function OrderSummary({ amounts, loading = false, estimated = false, children }) {
   return (
     <aside className="cart-summary">

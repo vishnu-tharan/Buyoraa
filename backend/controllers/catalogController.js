@@ -1,12 +1,27 @@
 import mongoose from 'mongoose'
 import Category from '../models/Category.js'
-import Product, { activeProducts } from '../models/Product.js'
-import { escapeSearch } from '../utils/query.js'
+import Order from '../models/Order.js'
+import Product, { activeProducts, ProductReview } from '../models/Product.js'
+import { escapeSearch, readPage } from '../utils/query.js'
 
 const productSorts = {
   newest: { createdAt: -1, _id: -1 },
   'price-asc': { price: 1, _id: 1 },
   'price-desc': { price: -1, _id: -1 },
+}
+
+async function reviewRatings(productIds) {
+  if (!productIds.length) return new Map()
+  const ratings = await ProductReview.aggregate([
+    { $match: { product: { $in: productIds } } },
+    { $group: { _id: '$product', average: { $avg: '$stars' }, count: { $sum: 1 } } },
+  ])
+  return new Map(ratings.map(({ _id, ...rating }) => [String(_id), rating]))
+}
+
+async function ratedProducts(products) {
+  const ratings = await reviewRatings(products.map(({ _id }) => _id))
+  return products.map((product) => ({ ...product, rating: ratings.get(String(product._id)) ?? null }))
 }
 
 function priceInCents(value) {
@@ -90,11 +105,12 @@ export async function listProducts(request, response) {
       .populate('category', 'name slug')
       .sort(productSorts[sort])
       .skip((pageNumber - 1) * pageSize)
-      .limit(pageSize),
+      .limit(pageSize)
+      .lean(),
     Product.countDocuments(filters),
   ])
 
-  response.json({ products, page: pageNumber, pageSize, total })
+  response.json({ products: await ratedProducts(products), page: pageNumber, pageSize, total })
 }
 
 export async function recentProducts(request, response) {
@@ -115,7 +131,7 @@ export async function recentProducts(request, response) {
   const byId = new Map(products.map((product) => [String(product._id), product]))
 
   response.set('Cache-Control', 'no-store').json({
-    products: orderedIds.map((id) => byId.get(id)).filter(Boolean),
+    products: await ratedProducts(orderedIds.map((id) => byId.get(id)).filter(Boolean)),
   })
 }
 
@@ -124,7 +140,7 @@ export async function getProduct(request, response) {
     return response.status(400).json({ message: 'Enter a valid product ID.' })
   }
 
-  const product = await Product.findOne({ _id: request.params.id, ...activeProducts }).populate('category', 'name slug')
+  const product = await Product.findOne({ _id: request.params.id, ...activeProducts }).populate('category', 'name slug').lean()
   if (!product) {
     return response.status(404).json({ message: 'Product not found.' })
   }
@@ -139,7 +155,74 @@ export async function getProduct(request, response) {
       .populate('category', 'name slug')
       .sort({ createdAt: -1, _id: -1 })
       .limit(4)
+      .lean()
     : []
 
-  response.json({ product, relatedProducts })
+  const [ratedProduct, ...ratedRelated] = await ratedProducts([product, ...relatedProducts])
+  response.json({ product: ratedProduct, relatedProducts: ratedRelated })
+}
+
+async function hasDeliveredPurchase(user, product) {
+  return Boolean(await Order.exists({
+    user, 'orderItems.product': product, orderStatus: { $in: ['delivered', 'returned'] }, paymentStatus: 'paid',
+  }))
+}
+
+export async function listReviews(request, response) {
+  const { id } = request.params
+  const page = readPage(request.query.page)
+  if (!page || !mongoose.isObjectIdOrHexString(id)) return response.status(400).json({ message: 'Choose a valid product and review page.' })
+
+  const product = new mongoose.Types.ObjectId(id)
+  if (!(await Product.exists({ _id: product, ...activeProducts }))) return response.status(404).json({ message: 'Product not found.' })
+
+  const pageSize = 10
+  const [reviews, ratings] = await Promise.all([
+    ProductReview.find({ product }).select('stars comment createdAt').sort({ createdAt: -1, _id: -1 })
+      .skip((page - 1) * pageSize).limit(pageSize).lean(),
+    reviewRatings([product]),
+  ])
+  const rating = ratings.get(id.toLowerCase()) ?? null
+  response.json({ reviews, rating, page, pageSize, total: rating?.count ?? 0 })
+}
+
+export async function myReview(request, response) {
+  const { id } = request.params
+  if (!mongoose.isObjectIdOrHexString(id)) return response.status(400).json({ message: 'Choose a valid product.' })
+
+  const user = request.user.id
+  const [review, eligible] = await Promise.all([
+    ProductReview.findOne({ user, product: id }).select('stars comment').lean(),
+    hasDeliveredPurchase(user, id),
+  ])
+  response.json({ review, eligible })
+}
+
+export async function saveReview(request, response) {
+  const { id } = request.params
+  const { stars, comment } = request.body ?? {}
+  const text = typeof comment === 'string' ? comment.trim() : ''
+  if (!mongoose.isObjectIdOrHexString(id) || !Number.isInteger(stars) || stars < 1 || stars > 5 || !text || text.length > 1000) {
+    return response.status(400).json({ message: 'Choose 1 to 5 stars and write a review of up to 1,000 characters.' })
+  }
+  if (!(await Product.exists({ _id: id, ...activeProducts }))) return response.status(404).json({ message: 'Product not found.' })
+  const user = request.user.id
+  if (!(await hasDeliveredPurchase(user, id))) return response.status(403).json({ message: 'You can review this product after receiving your order.' })
+
+  const filter = { user, product: id }
+  const update = { $set: { stars, comment: text } }
+  try {
+    await ProductReview.updateOne(filter, update, { upsert: true, runValidators: true })
+  } catch (error) {
+    if (error.code !== 11000) throw error
+    await ProductReview.updateOne(filter, update, { runValidators: true })
+  }
+  response.sendStatus(204)
+}
+
+export async function deleteReview(request, response) {
+  const { id } = request.params
+  if (!mongoose.isObjectIdOrHexString(id)) return response.status(400).json({ message: 'Choose a valid product.' })
+  await ProductReview.deleteOne({ user: request.user.id, product: id })
+  response.sendStatus(204)
 }

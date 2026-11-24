@@ -41,6 +41,7 @@ const orderSchema = new mongoose.Schema(
     checkoutFingerprint: { type: String, immutable: true, select: false },
     paymentMethod: { type: String, enum: ['cash_on_delivery'], default: 'cash_on_delivery' },
     paymentStatus: { type: String, enum: ['pending', 'paid'], default: 'pending' },
+    paidAt: Date,
     returnRestocked: { type: Boolean, select: false },
     orderStatus: {
       type: String,
