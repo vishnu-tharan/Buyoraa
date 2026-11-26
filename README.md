@@ -6,6 +6,20 @@
 
 Buyora is a JavaScript MERN store with a responsive red and yellow storefront. Customers can search and filter products, save a wishlist, manage delivery addresses, and place Cash on Delivery orders in Sri Lankan rupees. Admins can manage the catalog and stock, update orders, search customers, and view collected sales.
 
+## Screenshots
+
+These screens use sample accounts and orders from the Jaffna area.
+
+| Storefront | Checkout |
+| --- | --- |
+| ![Buyora homepage with shopping benefits and product categories](screenshots/storefront.png) | ![Checkout with a saved Jaffna address and order summary](screenshots/checkout.png) |
+| Browse categories and featured products from the homepage. | Use a saved address and review the Cash on Delivery total before ordering. |
+
+| Order tracking | Admin dashboard |
+| --- | --- |
+| ![Customer order page with the Shipped step highlighted](screenshots/order-tracking.png) | ![Admin dashboard with low-stock alerts and a seven-day sales chart](screenshots/admin-dashboard.png) |
+| Follow an order through confirmation, shipping, and delivery. | Review low-stock products, collected sales, and recent orders. |
+
 ## Project layout
 
 ```text
