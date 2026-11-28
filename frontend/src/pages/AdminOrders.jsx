@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
 import { Loading, PageMessage, Pagination } from '../components/Feedback.jsx'
@@ -6,16 +6,18 @@ import OrderSummary, { orderPaymentLabel, orderStatusLabels, OrderStatusBadge } 
 import { formatPrice } from '../components/ProductGrid.jsx'
 
 const dateFormat = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium', timeZone: 'Asia/Colombo' })
+const dateTimeFormat = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Colombo' })
 
 function orderNumber(id) {
   return `#${id.slice(-8).toUpperCase()}`
 }
 
-export function AdminOrdersTable({ orders }) {
+export function AdminOrdersTable({ orders, selection }) {
   return (
     <div className="admin-table">
       <table>
         <thead><tr>
+          {selection && <th scope="col">Select</th>}
           <th scope="col">Order</th>
           <th scope="col">Customer</th>
           <th scope="col">Placed</th>
@@ -25,6 +27,10 @@ export function AdminOrdersTable({ orders }) {
         <tbody>
           {orders.map((order) => (
             <tr key={order._id}>
+              {selection && <td>{order.orderStatus === 'pending' && (
+                <input type="checkbox" aria-label={`Select order ${orderNumber(order._id)}`}
+                  checked={selection.selected.includes(order._id)} disabled={selection.saving} onChange={() => selection.toggle(order._id)} />
+              )}</td>}
               <td><Link className="text-link" to={`/admin/orders/${order._id}`}>{orderNumber(order._id)}</Link></td>
               <td>{order.user?.name ?? 'Customer unavailable'}</td>
               <td>{dateFormat.format(new Date(order.createdAt))}</td>
@@ -35,6 +41,65 @@ export function AdminOrdersTable({ orders }) {
         </tbody>
       </table>
     </div>
+  )
+}
+
+function BulkConfirmation({ orders, onComplete }) {
+  const [selected, setSelected] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [results, setResults] = useState(null)
+  const [error, setError] = useState('')
+  const pending = orders.filter(({ orderStatus }) => orderStatus === 'pending').map(({ _id }) => _id)
+  const selection = selected.filter((id) => pending.includes(id))
+
+  function toggle(id) {
+    setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])
+  }
+
+  async function confirm() {
+    if (!selection.length || !window.confirm(`Confirm ${selection.length} selected ${selection.length === 1 ? 'order' : 'orders'}?`)) return
+    setSaving(true)
+    setResults(null)
+    setError('')
+    try {
+      const { data } = await api.post('/admin/orders/confirm', { orderIds: selection }, { timeout: 20000 })
+      setResults(data.results)
+      setSelected([])
+      onComplete()
+    } catch (requestError) {
+      setError(errorMessage(requestError, 'We couldn’t verify the confirmation. Retry or reload to check the order statuses.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const skipped = results?.filter(({ outcome }) => outcome === 'skipped') ?? []
+  return (
+    <>
+      {pending.length > 0 && (
+        <div className="admin-actions mb-4">
+          <button type="button" className="button button-outline" disabled={!selection.length || saving} onClick={confirm}>
+            {saving ? 'Confirming…' : `Confirm selected (${selection.length})`}
+          </button>
+          <button type="button" className="text-link" disabled={saving} onClick={() =>
+            setSelected(selection.length === pending.length ? [] : pending)}>
+            {selection.length === pending.length ? 'Clear selection' : 'Select pending orders on this page'}
+          </button>
+        </div>
+      )}
+      {error && <p className="form-error mb-4" role="alert">{error}</p>}
+      {results && (
+        <div className="checkout-panel mb-4" role="status">
+          <p>{results.filter(({ outcome }) => outcome === 'confirmed').length} confirmed · {results.filter(({ outcome }) => outcome === 'already_confirmed').length} already confirmed · {skipped.length} need attention</p>
+          {skipped.length > 0 && <ul className="order-lines">
+            {skipped.map(({ orderId, message }) => (
+              <li key={orderId}><Link className="text-link" to={`/admin/orders/${orderId}`}>{orderNumber(orderId)}</Link><span>{message}</span></li>
+            ))}
+          </ul>}
+        </div>
+      )}
+      {orders.length > 0 && <AdminOrdersTable orders={orders} selection={pending.length ? { selected: selection, saving, toggle } : undefined} />}
+    </>
   )
 }
 
@@ -83,7 +148,7 @@ export function AdminOrders() {
       {loading && <Loading label="Loading orders…" />}
       {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load orders.')}</PageMessage>}
       {data?.orders.length === 0 && <PageMessage>No orders match these filters.</PageMessage>}
-      {data?.orders.length > 0 && <AdminOrdersTable orders={data.orders} />}
+      <BulkConfirmation key={params.toString()} orders={data?.orders ?? []} onComplete={retry} />
       {data && <Pagination data={data} path="/admin/orders" params={params} label="Admin order pages" />}
     </section>
   )
@@ -206,6 +271,86 @@ function AdminNotes({ order, onSaved }) {
   )
 }
 
+function StatusHistory({ order }) {
+  const changes = order.statusHistory ?? []
+  return (
+    <section className="checkout-panel">
+      <h2>Order status history</h2>
+      <ol className="grid gap-3">
+        {changes.toReversed().map(({ _id, from, to, actor, source, changedAt }) => (
+          <li key={_id}>
+            <p>{orderStatusLabels[from]} → {orderStatusLabels[to]}</p>
+            <p className="text-sm text-stone-600">
+              {actor.name} ({source}) · <time dateTime={changedAt}>{dateTimeFormat.format(new Date(changedAt))}</time>
+            </p>
+          </li>
+        ))}
+        <li>
+          <p>Order placed</p>
+          <time className="text-sm text-stone-600" dateTime={order.createdAt}>{dateTimeFormat.format(new Date(order.createdAt))}</time>
+        </li>
+      </ol>
+      {(changes[0]?.from ?? order.orderStatus) !== 'pending' && <p className="text-sm">Earlier status changes were not recorded.</p>}
+    </section>
+  )
+}
+
+function Refunds({ order, onSaved }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const attempt = useRef(null)
+  const refunds = order.refunds ?? []
+  const refunded = refunds.reduce((sum, refund) => sum + refund.amount, 0)
+  const remaining = order.totalAmount - refunded
+
+  async function save(event) {
+    event.preventDefault()
+    const values = Object.fromEntries(new FormData(event.currentTarget))
+    const details = JSON.stringify(values)
+    if (attempt.current?.details !== details) attempt.current = { id: crypto.randomUUID(), details }
+    setSaving(true)
+    setError('')
+    try {
+      await api.post(`/admin/orders/${order._id}/refunds`, { ...values, refundId: attempt.current.id })
+      onSaved()
+    } catch (requestError) {
+      setError(errorMessage(requestError, 'We couldn’t verify that the refund was saved. Try again with the same details.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="checkout-panel">
+      <h2>Refund records</h2>
+      <p>Refunded {formatPrice(refunded)} · Remaining {formatPrice(remaining)}</p>
+      {refunds.length > 0 && (
+        <ul className="grid gap-3">
+          {refunds.toReversed().map(({ _id, amount, refundedOn, reason, actor }) => (
+            <li key={_id}>
+              <p><strong>{formatPrice(amount)}</strong> · {dateFormat.format(new Date(refundedOn))}</p>
+              <p className="whitespace-pre-wrap wrap-anywhere">{reason}</p>
+              <p className="text-sm text-stone-600">Recorded by {actor.name}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {remaining > 0 && (
+        <form onSubmit={save}>
+          <p className="mb-2 text-sm">Record money after it has been refunded to the customer.</p>
+          <fieldset className="account-form" disabled={saving}>
+            <label>Amount (LKR)<input name="amount" inputMode="decimal" maxLength={17} required /></label>
+            <label>Refund date (Sri Lanka time)<input name="refundedOn" type="date" required /></label>
+            <label className="col-span-full">Reason<textarea name="reason" rows={3} maxLength={500} required /></label>
+            {error && <p className="form-error col-span-full" role="alert">{error}</p>}
+            <button className="button button-outline" type="submit">{saving ? 'Saving…' : 'Record refund'}</button>
+          </fieldset>
+        </form>
+      )}
+    </section>
+  )
+}
+
 export function AdminOrderDetails() {
   const { id } = useParams()
   const { data, error, loading, retry } = useApi(`/admin/orders/${encodeURIComponent(id)}`)
@@ -282,7 +427,14 @@ export function AdminOrderDetails() {
           )}
         </OrderSummary>
       </div>
-      <div className="mt-5">
+      <div className="mt-5 grid gap-4">
+        <StatusHistory order={order} />
+        {order.orderStatus === 'returned' && order.paymentStatus === 'paid' && (
+          <Refunds key={id} order={order} onSaved={() => {
+            setNotice({ message: 'Refund recorded.' })
+            retry()
+          }} />
+        )}
         <AdminNotes key={id} order={order} onSaved={() => {
           setNotice({ message: 'Staff note saved.' })
           retry()

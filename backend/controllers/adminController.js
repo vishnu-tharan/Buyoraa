@@ -1,10 +1,11 @@
 import Order, { DiscountCode, getDeliveryEstimate, readDiscountCode, saveDeliveryEstimate } from '../models/Order.js'
 import Product, { activeProducts } from '../models/Product.js'
 import User from '../models/User.js'
-import { escapeSearch, readPage } from '../utils/query.js'
+import { dayMs, escapeSearch, readPage, readRupees, readSriLankaDate } from '../utils/query.js'
 
-const dayMs = 24 * 60 * 60 * 1000
 const colomboOffsetMs = 330 * 60 * 1000
+const collectedOrders = { orderStatus: { $in: ['delivered', 'returned'] }, paymentStatus: 'paid' }
+const collectionDate = { $ifNull: ['$paidAt', '$updatedAt', '$createdAt'] }
 
 export async function adminDeliveryEstimate(request, response) {
   response.json({ deliveryEstimate: await getDeliveryEstimate() })
@@ -17,12 +18,6 @@ export async function updateDeliveryEstimate(request, response) {
   }
   await saveDeliveryEstimate({ minDays, maxDays })
   response.sendStatus(204)
-}
-
-function readRupees(value) {
-  if (typeof value !== 'string' || !/^\d{1,10}(\.\d{1,2})?$/.test(value)) return null
-  const [rupees, cents = ''] = value.split('.')
-  return Number(rupees) * 100 + Number(cents.padEnd(2, '0'))
 }
 
 export async function adminDiscounts(request, response) {
@@ -39,17 +34,17 @@ export async function adminDiscounts(request, response) {
 export async function createDiscount(request, response) {
   const { code: input, amount: rawAmount, minimumSubtotal: rawMinimum, expiry } = request.body ?? {}
   const code = readDiscountCode(input)
-  const amount = readRupees(rawAmount)
-  const minimumSubtotal = readRupees(rawMinimum)
+  const amount = readRupees(rawAmount, 10)
+  const minimumSubtotal = readRupees(rawMinimum, 10)
   if (!code) return response.status(400).json({ message: 'Use 3 to 24 letters, numbers or hyphens. Start with a letter or number.' })
   if (!amount || minimumSubtotal === null) {
     return response.status(400).json({ message: 'Enter a positive discount and a minimum subtotal of zero or more in LKR.' })
   }
-  const date = typeof expiry === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(expiry) ? new Date(`${expiry}T00:00:00Z`) : null
-  if (!date || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== expiry) {
+  const date = readSriLankaDate(expiry)
+  if (!date) {
     return response.status(400).json({ message: 'Choose a valid expiry date.' })
   }
-  const expiresAt = new Date(`${expiry}T23:59:59.999+05:30`)
+  const expiresAt = new Date(date.getTime() + dayMs - 1)
   if (expiresAt <= new Date()) return response.status(400).json({ message: 'Choose an expiry date that has not passed in Sri Lanka.' })
 
   try {
@@ -76,11 +71,11 @@ export async function adminOverview(request, response) {
     User.countDocuments({ role: 'customer' }),
     Order.countDocuments(),
     Order.aggregate([
-      { $match: { orderStatus: { $in: ['delivered', 'returned'] }, paymentStatus: 'paid' } },
+      { $match: collectedOrders },
       { $facet: {
         total: [{ $group: { _id: null, revenue: { $sum: '$totalAmount' } } }],
         days: [
-          { $set: { collectedAt: { $ifNull: ['$paidAt', '$updatedAt', '$createdAt'] } } },
+          { $set: { collectedAt: collectionDate } },
           { $match: { collectedAt: { $gte: new Date(firstDay - colomboOffsetMs), $lt: new Date(today + dayMs - colomboOffsetMs) } } },
           { $group: {
             _id: { $dateToString: { date: '$collectedAt', format: '%Y-%m-%d', timezone: 'Asia/Colombo' } },
@@ -107,6 +102,59 @@ export async function adminOverview(request, response) {
   response.json({
     productCount, customerCount, orderCount, revenue: collected[0]?.total[0]?.revenue ?? 0,
     recentOrders, lowStockCount, lowStockProducts, sales,
+  })
+}
+
+export async function adminSalesReport(request, response) {
+  const { from, to } = request.query
+  const start = readSriLankaDate(from)
+  const end = readSriLankaDate(to)
+  if (!start || !end || start > end) {
+    return response.status(400).json({ message: 'Choose valid start and end dates, with the start on or before the end.' })
+  }
+  const range = { $gte: start, $lt: new Date(end.getTime() + dayMs) }
+  const paidInRange = {
+    ...collectedOrders,
+    $or: [
+      { paidAt: range },
+      { paidAt: null, updatedAt: range },
+      { paidAt: null, updatedAt: null, createdAt: range },
+    ],
+  }
+
+  const [report] = await Order.aggregate([
+    { $match: { $or: [{ createdAt: range }, paidInRange, { 'refunds.refundedOn': range }] } },
+    { $facet: {
+      placed: [{ $match: { createdAt: range } }, { $count: 'count' }],
+      payments: [
+        { $match: paidInRange },
+        { $group: { _id: null, count: { $sum: 1 }, gross: { $sum: '$totalAmount' } } },
+      ],
+      refunds: [
+        { $unwind: '$refunds' },
+        { $match: { 'refunds.refundedOn': range } },
+        { $group: { _id: null, total: { $sum: '$refunds.amount' } } },
+      ],
+      topProducts: [
+        { $match: paidInRange },
+        { $unwind: '$orderItems' },
+        { $group: {
+          _id: '$orderItems.product',
+          name: { $max: '$orderItems.name' },
+          units: { $sum: '$orderItems.quantity' },
+        } },
+        { $sort: { units: -1, name: 1, _id: 1 } },
+        { $limit: 10 },
+      ],
+    } },
+  ])
+
+  const gross = report.payments[0]?.gross ?? 0
+  const refunded = report.refunds[0]?.total ?? 0
+  response.json({
+    ordersPlaced: report.placed[0]?.count ?? 0,
+    paidOrders: report.payments[0]?.count ?? 0,
+    gross, refunded, net: gross - refunded, topProducts: report.topProducts,
   })
 }
 

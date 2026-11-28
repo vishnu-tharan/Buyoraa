@@ -123,6 +123,8 @@ Add categories before products. Enter product prices in rupees and add one image
 
 In **Admin → Products**, choose **Archive** to hide a product from the store. Open **Archived**, select **Restore**, and confirm with **Restore product**. The original category is selected if it still exists. If it was deleted, choose a replacement category. Restoring keeps the product’s stock, past orders, and stock history.
 
+Search active or archived products by name and combine the search with a category and the low-stock filter.
+
 Orders move from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. Cancelling a pending or confirmed order restores stock. Marking an order delivered records its Cash on Delivery payment as paid. Customers can then open the order in **My orders** and choose **Print receipt** to print it or save a PDF.
 
 Admins can record private follow-ups under **Staff notes** on the order page.
@@ -131,13 +133,17 @@ Set the checkout delivery window under **Admin → Overview → Delivery estimat
 
 Use **Admin → Discounts** to create or disable fixed LKR discount codes. Each code has a minimum item subtotal and stays valid through its expiry date in Sri Lanka time. Checkout accepts one code per order and applies it to items before delivery. The order and receipt keep the discount applied at purchase.
 
-If a shipped order is refused or cannot be delivered, mark it **Delivery failed**. Stock stays reserved until the items return. Once all items are received back from a failed delivery or a delivered order, mark it **Returned** and choose whether to restock them. Restock only if every item can be sold again. Recording a return leaves the payment record and collected sales total intact. Handle any refund separately.
+If a shipped order is refused or cannot be delivered, mark it **Delivery failed**. Stock stays reserved until the items return. Once all items are received back from a failed delivery or a delivered order, mark it **Returned** and choose whether to restock them. Restock only if every item can be sold again. After money has been refunded to the customer for a paid, returned order, record the amount, refund date, and reason under **Refund records**. Multiple partial refunds can be recorded up to the amount paid.
 
 In **Admin → Orders**, search by order number, customer or recipient name, or phone number. Combine the search with status and date filters. Both dates are inclusive and use Sri Lanka time. Select **Download CSV** to export all orders matching the applied filters. Open an order to print a packing slip with its delivery address, instructions, items, and quantities.
+
+Select pending orders on the current page and choose **Confirm selected** to confirm them together. The result shows which orders need attention. Open an order’s **Order status history** to see who changed its status and when. The history records changes made after this feature was added.
 
 Open a product from the **Active** or **Archived** view to see **Stock history**. It records changes from product creation, manual stock edits, orders, cancellations, and restocked returns.
 
 The admin overview shows up to five active products that have five units or fewer and the total number that need restocking. The seven-day chart groups collected sales by payment date in Sri Lanka time. Older paid orders without a recorded payment date use their last update date.
+
+Use **Admin → Sales report** to see orders placed, paid orders, collections, refunds, net collections, and best-selling products for an inclusive Sri Lanka date range. Collections count on the payment date, refunds count on the refund date, and products are ranked by units in paid orders.
 
 ## Verify the app
 

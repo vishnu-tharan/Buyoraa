@@ -19,17 +19,30 @@ export function AdminProducts() {
   const [params, setParams] = useSearchParams()
   const { state } = useLocation()
   const { data, error, loading, retry } = useApi(`/admin/products?${params}`)
+  const categories = useApi('/categories')
   const archived = params.get('archived') === 'true'
   const lowStock = params.get('lowStock') === 'true'
+  const search = params.get('q') ?? ''
+  const category = params.get('category') ?? ''
   const [removing, setRemoving] = useState(false)
   const [notice, setNotice] = useState(null)
   const displayedNotice = notice ?? (state?.message ? { message: state.message } : null)
 
-  function changeStockFilter(event) {
+  function productView(showArchived) {
     const nextParams = new URLSearchParams(params)
     nextParams.delete('page')
-    if (event.target.checked) nextParams.set('lowStock', 'true')
-    else nextParams.delete('lowStock')
+    if (showArchived) nextParams.set('archived', 'true')
+    else nextParams.delete('archived')
+    return `/admin/products?${nextParams}`
+  }
+
+  function applyFilters(event) {
+    event.preventDefault()
+    const nextParams = new URLSearchParams()
+    if (archived) nextParams.set('archived', 'true')
+    for (const [name, value] of new FormData(event.currentTarget)) {
+      if (value.trim()) nextParams.set(name, value.trim())
+    }
     setParams(nextParams)
   }
 
@@ -56,20 +69,34 @@ export function AdminProducts() {
         <Link to="/admin/products/new" className="button button-red">Add product</Link>
       </div>
       <nav className="mb-4 flex flex-wrap gap-3" aria-label="Product views">
-        <Link className={`button ${archived ? 'button-outline' : 'button-red'}`} to="/admin/products" aria-current={archived ? undefined : 'page'}>Active</Link>
-        <Link className={`button ${archived ? 'button-red' : 'button-outline'}`} to="/admin/products?archived=true" aria-current={archived ? 'page' : undefined}>Archived</Link>
+        <Link className={`button ${archived ? 'button-outline' : 'button-red'}`} to={productView(false)} aria-current={archived ? undefined : 'page'}>Active</Link>
+        <Link className={`button ${archived ? 'button-red' : 'button-outline'}`} to={productView(true)} aria-current={archived ? 'page' : undefined}>Archived</Link>
       </nav>
-      <label className="mb-4 inline-flex items-center gap-2 text-sm font-semibold">
-        <input type="checkbox" checked={lowStock} onChange={changeStockFilter} className="size-4 accent-brand-red" />
-        Low stock only (1–5 units)
-      </label>
+      <form className="admin-search" key={JSON.stringify([search, category, lowStock])} onSubmit={applyFilters}>
+        <label>Product name<input name="q" type="search" maxLength={100} defaultValue={search} /></label>
+        <label>
+          Category
+          <select name="category" defaultValue={category}>
+            <option value="">All categories</option>
+            {category && !categories.data?.categories.some(({ _id }) => _id === category) && <option key={category} value={category}>Selected category</option>}
+            {categories.data?.categories.map(({ _id, name }) => <option key={_id} value={_id}>{name}</option>)}
+          </select>
+        </label>
+        <label className="admin-product-stock-filter">
+          <input name="lowStock" type="checkbox" value="true" defaultChecked={lowStock} />
+          Low stock only (1–5 units)
+        </label>
+        <button className="button button-red" type="submit">Apply filters</button>
+        {(search || category || lowStock) && <Link className="text-link" to={archived ? '/admin/products?archived=true' : '/admin/products'}>Clear filters</Link>}
+      </form>
+      {categories.error && <PageMessage error onRetry={categories.retry}>We couldn’t load the categories.</PageMessage>}
       {displayedNotice && (
         <p className={displayedNotice.error ? 'form-error mb-4' : 'mb-4'} role={displayedNotice.error ? 'alert' : 'status'}>{displayedNotice.message}</p>
       )}
       {loading && <Loading label="Loading products…" />}
       {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load products.')}</PageMessage>}
       {data?.products.length === 0 && (
-        <PageMessage>{lowStock ? 'No low-stock products on this page.' : `No ${archived ? 'archived' : 'active'} products on this page.`}</PageMessage>
+        <PageMessage>No {archived ? 'archived' : 'active'} products match these filters.</PageMessage>
       )}
       {data?.products.length > 0 && (
         <div className="admin-table">

@@ -29,7 +29,7 @@ export const nextStatuses = {
   cancelled: [],
 }
 
-export async function changeOrderStatus({ orderId, status, customerId, restock }) {
+export async function changeOrderStatus({ orderId, status, actor, customerId, restock }) {
   const filter = { _id: orderId }
   if (customerId) filter.user = customerId
   const returning = status === 'returned'
@@ -37,13 +37,13 @@ export async function changeOrderStatus({ orderId, status, customerId, restock }
 
   try {
     return await mongoose.connection.transaction(async (session) => {
-      const order = await Order.findOne(filter).select('+returnRestocked').session(session)
+      const order = await Order.findOne(filter).select('+returnRestocked +statusHistory').session(session)
       if (!order) return { httpStatus: 404, message: 'Order not found.' }
       if (order.orderStatus === status) {
         if (returning && order.returnRestocked !== restock) {
           return { httpStatus: 409, message: 'This return has already been recorded. Check the stock decision on the order.' }
         }
-        return { httpStatus: 204 }
+        return { httpStatus: 204, unchanged: true }
       }
 
       if (customerId && (order.orderStatus !== 'pending' || order.paymentStatus !== 'pending')) {
@@ -53,10 +53,19 @@ export async function changeOrderStatus({ orderId, status, customerId, restock }
         return { httpStatus: 409, message: 'This order cannot move to that status. Reload it to see its current status.' }
       }
 
+      const changedAt = new Date()
+      order.statusHistory ??= []
+      order.statusHistory.push({
+        from: order.orderStatus, to: status, actor: { user: actor.id, name: actor.name },
+        source: customerId ? 'customer' : 'admin', changedAt,
+      })
       order.orderStatus = status
       if (status === 'delivered') {
         order.paymentStatus = 'paid'
-        order.paidAt = new Date()
+        order.paidAt = changedAt
+      } else if (order.paymentStatus === 'paid' && !order.paidAt) {
+        // Retain the legacy collection date when a later status changes updatedAt.
+        order.paidAt = order.updatedAt ?? order.createdAt
       }
       if (returning) order.returnRestocked = restock
       await order.save({ session })
@@ -269,7 +278,7 @@ export async function cancelOrder(request, response) {
     return response.status(400).json({ message: 'Enter a valid order ID.' })
   }
 
-  const result = await changeOrderStatus({ orderId: id, status: 'cancelled', customerId: request.user.id })
+  const result = await changeOrderStatus({ orderId: id, status: 'cancelled', actor: request.user, customerId: request.user.id })
   if (result.message) return response.status(result.httpStatus).json({ message: result.message })
   response.sendStatus(result.httpStatus)
 }

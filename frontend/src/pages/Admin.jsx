@@ -1,4 +1,4 @@
-import { ClipboardList, LayoutDashboard, Package, Tag, Tags, UsersRound } from 'lucide-react'
+import { ChartColumn, ClipboardList, LayoutDashboard, Package, Tag, Tags, UsersRound } from 'lucide-react'
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useSearchParams } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
@@ -17,6 +17,7 @@ const adminLinks = [
   { path: '/admin/products', label: 'Products', Icon: Package },
   { path: '/admin/categories', label: 'Categories', Icon: Tags },
   { path: '/admin/orders', label: 'Orders', Icon: ClipboardList },
+  { path: '/admin/sales-report', label: 'Sales report', Icon: ChartColumn },
   { path: '/admin/discounts', label: 'Discounts', Icon: Tag },
   { path: '/admin/users', label: 'Customers', Icon: UsersRound },
 ]
@@ -289,6 +290,61 @@ export function AdminDiscounts() {
         </div>
       )}
       {data && <Pagination data={data} path="/admin/discounts" params={params} label="Discount pages" />}
+    </section>
+  )
+}
+
+export function AdminSalesReport() {
+  const [params, setParams] = useSearchParams()
+  const todayInSriLanka = Date.now() + 330 * 60 * 1000
+  const today = new Date(todayInSriLanka).toISOString().slice(0, 10)
+  const firstDay = new Date(todayInSriLanka - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const from = params.get('from') ?? firstDay
+  const to = params.get('to') ?? today
+  const query = new URLSearchParams({ from, to })
+  const { data, error, loading, retry } = useApi(`/admin/sales-report?${query}`)
+
+  function applyDates(event) {
+    event.preventDefault()
+    setParams(new URLSearchParams(new FormData(event.currentTarget)))
+  }
+
+  return (
+    <section>
+      <div className="page-heading">
+        <h1>Sales report</h1>
+        <p>Dates include both the start and end day in Sri Lanka time.</p>
+      </div>
+      <form className="admin-search" key={query.toString()} onSubmit={applyDates}>
+        <label>From date<input name="from" type="date" defaultValue={from} required /></label>
+        <label>To date<input name="to" type="date" defaultValue={to} required /></label>
+        <button className="button button-red" type="submit">Show report</button>
+      </form>
+      {loading && <Loading label="Loading sales report…" />}
+      {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load the sales report.')}</PageMessage>}
+      {data && (
+        <>
+          <dl className="admin-stats sales-report-stats">
+            <div><dt>Orders placed</dt><dd>{data.ordersPlaced}</dd></div>
+            <div><dt>Paid orders</dt><dd>{data.paidOrders}</dd></div>
+            <div><dt>Collected</dt><dd>{formatPrice(data.gross)}</dd></div>
+            <div><dt>Refunded</dt><dd>{formatPrice(data.refunded)}</dd></div>
+            <div><dt>Net collected</dt><dd>{formatPrice(data.net)}</dd></div>
+          </dl>
+          <p className="mb-5 text-sm text-stone-600">Collections and refunds count on their own dates. Refunds can include orders paid in an earlier period.</p>
+          <div className="section-heading"><h2>Best-selling products</h2></div>
+          {data.topProducts.length ? (
+            <div className="admin-table">
+              <table>
+                <thead><tr><th scope="col">Product</th><th scope="col">Units in paid orders</th></tr></thead>
+                <tbody>{data.topProducts.map(({ _id, name, units }) => (
+                  <tr key={_id}><td>{name}</td><td>{units}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+          ) : <PageMessage>No paid items in this date range.</PageMessage>}
+        </>
+      )}
     </section>
   )
 }

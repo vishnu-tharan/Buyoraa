@@ -654,6 +654,7 @@ a.product-card:hover, a.product-card:focus-visible { border-color: var(--color-b
 
 .admin-stats dt { color: #544a43; font-size: 0.85rem; font-weight: 650; }
 .admin-stats dd { margin-top: 0.4rem; overflow-wrap: anywhere; color: var(--color-brand-red); font-size: 1.25rem; font-weight: 800; }
+.admin-stats.sales-report-stats { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); }
 
 .admin-page-heading,
 .admin-actions,
@@ -668,6 +669,8 @@ a.product-card:hover, a.product-card:focus-visible { border-color: var(--color-b
 .admin-search { align-items: end; margin-bottom: 1rem; }
 .admin-search label, .admin-status-form label { display: grid; gap: 0.35rem; font-weight: 700; }
 .admin-status-form { display: grid; gap: 0.65rem; }
+.admin-search .admin-product-stock-filter { display: flex; align-items: center; align-self: center; }
+.admin-search .admin-product-stock-filter input { width: 1rem; min-height: 1rem; padding: 0; accent-color: var(--color-brand-red); }
 
 .admin-search input,
 .admin-search select,

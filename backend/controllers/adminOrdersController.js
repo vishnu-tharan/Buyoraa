@@ -3,17 +3,10 @@ import { pipeline } from 'node:stream/promises'
 import mongoose from 'mongoose'
 import Order, { orderStatuses } from '../models/Order.js'
 import User from '../models/User.js'
-import { escapeSearch, readPage } from '../utils/query.js'
+import { dayMs, escapeSearch, readPage, readRupees, readSriLankaDate } from '../utils/query.js'
 import { changeOrderStatus, nextStatuses } from './orderController.js'
 
-const dayMs = 24 * 60 * 60 * 1000
-
-function readOrderDate(value) {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
-  const midnight = new Date(`${value}T00:00:00.000Z`)
-  if (Number.isNaN(midnight.getTime()) || midnight.toISOString().slice(0, 10) !== value) return null
-  return new Date(`${value}T00:00:00+05:30`)
-}
+const refundIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 async function orderSearch(term) {
   const number = term.replace(/^#/, '').toLowerCase()
@@ -46,8 +39,8 @@ async function readOrderFilters({ status, q = '', from, to }) {
     return { message: 'Use up to 100 characters to search orders.' }
   }
 
-  const start = from === undefined ? undefined : readOrderDate(from)
-  const end = to === undefined ? undefined : readOrderDate(to)
+  const start = from === undefined ? undefined : readSriLankaDate(from)
+  const end = to === undefined ? undefined : readSriLankaDate(to)
   if (start === null || end === null || (start && end && start > end)) {
     return { message: 'Choose valid dates with the start date on or before the end date.' }
   }
@@ -115,9 +108,53 @@ export async function exportAdminOrders(request, response) {
 }
 
 export async function adminOrder(request, response) {
-  const order = await Order.findById(request.params.id).select('+returnRestocked +adminNotes').populate('user', 'name email').lean()
+  const order = await Order.findById(request.params.id).select('+returnRestocked +adminNotes +statusHistory +refunds').populate('user', 'name email').lean()
   if (!order) return response.status(404).json({ message: 'Order not found.' })
   response.json({ order, allowedStatuses: nextStatuses[order.orderStatus] })
+}
+
+export async function recordRefund(request, response) {
+  const { amount: rawAmount, refundedOn, reason: rawReason, refundId } = request.body ?? {}
+  const amount = readRupees(rawAmount)
+  const date = readSriLankaDate(refundedOn)
+  const reason = typeof rawReason === 'string' ? rawReason.trim() : ''
+  if (!amount || !date || date > new Date() || !reason || reason.length > 500
+    || typeof refundId !== 'string' || !refundIdPattern.test(refundId)) {
+    return response.status(400).json({ message: 'Enter a positive LKR amount, a valid refund date, and a reason of up to 500 characters.' })
+  }
+
+  const result = await mongoose.connection.transaction(async (session) => {
+    const order = await Order.findById(request.params.id).select('+refunds').session(session)
+    if (!order) return { status: 404, message: 'Order not found.' }
+    const refunds = order.refunds ?? []
+    const previous = refunds.find(({ _id }) => _id === refundId)
+    if (previous) {
+      if (previous.amount !== amount || previous.reason !== reason || previous.refundedOn.getTime() !== date.getTime()) {
+        return { status: 409, message: 'This refund was already recorded with different details.' }
+      }
+      return { status: 200 }
+    }
+    if (order.orderStatus !== 'returned' || order.paymentStatus !== 'paid' || order.paymentMethod !== 'cash_on_delivery') {
+      return { status: 409, message: 'You can only record a refund for a paid, returned Cash on Delivery order.' }
+    }
+    if ((order.paidAt ?? order.createdAt) >= new Date(date.getTime() + dayMs)) {
+      return { status: 400, message: 'The refund date must be on or after the payment date.' }
+    }
+    const alreadyRefunded = refunds.reduce((sum, refund) => sum + refund.amount, 0)
+    if (amount > order.totalAmount - alreadyRefunded) {
+      return { status: 409, message: 'The refund exceeds the remaining amount paid for this order.' }
+    }
+    order.refunds ??= []
+    order.refunds.push({
+      _id: refundId, amount, refundedOn: date, reason, recordedAt: new Date(),
+      actor: { user: request.user.id, name: request.user.name },
+    })
+    await order.save({ session, timestamps: false })
+    return { status: 201 }
+  })
+
+  if (result.message) return response.status(result.status).json({ message: result.message })
+  response.sendStatus(result.status)
 }
 
 export async function addOrderNote(request, response) {
@@ -143,7 +180,30 @@ export async function updateOrderStatus(request, response) {
     return response.status(400).json({ message: 'Choose whether to restock the returned items.' })
   }
 
-  const result = await changeOrderStatus({ orderId: request.params.id, status, restock })
+  const result = await changeOrderStatus({ orderId: request.params.id, status, actor: request.user, restock })
   if (result.message) return response.status(result.httpStatus).json({ message: result.message })
   response.sendStatus(result.httpStatus)
+}
+
+export async function confirmOrders(request, response) {
+  const { orderIds } = request.body ?? {}
+  if (!Array.isArray(orderIds) || orderIds.length < 1 || orderIds.length > 20
+    || orderIds.some((id) => typeof id !== 'string' || !mongoose.isObjectIdOrHexString(id))) {
+    return response.status(400).json({ message: 'Select between 1 and 20 valid orders.' })
+  }
+  const ids = [...new Set(orderIds.map((id) => id.toLowerCase()))]
+  const changes = await Promise.allSettled(ids.map((orderId) =>
+    changeOrderStatus({ orderId, status: 'confirmed', actor: request.user }),
+  ))
+  const results = changes.map((change, index) => {
+    const orderId = ids[index]
+    if (change.status === 'rejected') {
+      console.error(`Bulk order confirmation failed: ${change.reason?.name ?? 'Error'}`)
+      return { orderId, outcome: 'skipped', message: 'Couldn’t confirm this order. Reload to check its status.' }
+    }
+    if (change.value.unchanged) return { orderId, outcome: 'already_confirmed' }
+    if (change.value.httpStatus === 204) return { orderId, outcome: 'confirmed' }
+    return { orderId, outcome: 'skipped', message: change.value.message }
+  })
+  response.json({ results })
 }

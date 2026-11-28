@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 import Category from '../models/Category.js'
 import Product, { activeProducts, StockChange } from '../models/Product.js'
-import { readPage } from '../utils/query.js'
+import { escapeSearch, readPage } from '../utils/query.js'
 
 function readText(value) {
   return typeof value === 'string' ? value.trim() : ''
@@ -46,7 +46,7 @@ function categoryFields(input = {}) {
 }
 
 export async function adminProducts(request, response) {
-  const { page: requestedPage, lowStock, archived } = request.query
+  const { page: requestedPage, lowStock, archived, q = '', category } = request.query
   const page = readPage(requestedPage)
   if (!page) return response.status(400).json({ message: 'Enter a valid page number.' })
   if (lowStock !== undefined && lowStock !== 'true' && lowStock !== 'false') {
@@ -55,9 +55,18 @@ export async function adminProducts(request, response) {
   if (archived !== undefined && archived !== 'true' && archived !== 'false') {
     return response.status(400).json({ message: 'Archived must be true or false.' })
   }
+  if (typeof q !== 'string' || q.length > 100) {
+    return response.status(400).json({ message: 'Use up to 100 characters to search products.' })
+  }
+  if (category !== undefined && (typeof category !== 'string' || !mongoose.isObjectIdOrHexString(category))) {
+    return response.status(400).json({ message: 'Choose a valid category.' })
+  }
 
   const filters = archived === 'true' ? { archived: true } : { ...activeProducts }
   if (lowStock === 'true') filters.stock = { $gte: 1, $lte: 5 }
+  if (category) filters.category = category
+  const search = q.trim()
+  if (search) filters.name = { $regex: escapeSearch(search), $options: 'i' }
 
   const pageSize = 20
   const [products, total] = await Promise.all([

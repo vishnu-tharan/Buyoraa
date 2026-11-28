@@ -33,6 +33,28 @@ const adminNoteSchema = new mongoose.Schema({
   createdAt: { type: Date, required: true },
 })
 
+const orderActorSchema = new mongoose.Schema({
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  name: { type: String, required: true, maxlength: 100 },
+}, { _id: false })
+
+const orderStatusChangeSchema = new mongoose.Schema({
+  from: { type: String, enum: orderStatuses, required: true },
+  to: { type: String, enum: orderStatuses, required: true },
+  actor: { type: orderActorSchema, required: true },
+  source: { type: String, enum: ['admin', 'customer'], required: true },
+  changedAt: { type: Date, required: true },
+})
+
+const orderRefundSchema = new mongoose.Schema({
+  _id: { type: String, required: true },
+  amount: { type: Number, required: true, min: 1, validate: Number.isSafeInteger },
+  refundedOn: { type: Date, required: true },
+  recordedAt: { type: Date, required: true },
+  reason: { type: String, required: true, trim: true, maxlength: 500 },
+  actor: { type: orderActorSchema, required: true },
+})
+
 const storeSettingsSchema = new mongoose.Schema({
   _id: String,
   deliveryEstimate: deliveryEstimateSchema,
@@ -79,6 +101,8 @@ const orderSchema = new mongoose.Schema(
     deliveryInstructions: { type: String, trim: true, maxlength: 300 },
     deliveryEstimate: deliveryEstimateSchema,
     adminNotes: { type: [adminNoteSchema], select: false, default: undefined },
+    statusHistory: { type: [orderStatusChangeSchema], select: false, default: undefined },
+    refunds: { type: [orderRefundSchema], select: false, default: undefined },
     subtotal: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
     shippingFee: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
     discountCode: String,
@@ -102,6 +126,8 @@ const orderSchema = new mongoose.Schema(
 orderSchema.index({ user: 1, createdAt: -1, _id: -1 })
 orderSchema.index({ createdAt: -1, _id: -1 })
 orderSchema.index({ orderStatus: 1, createdAt: -1, _id: -1 })
+orderSchema.index({ paymentStatus: 1, paidAt: 1 })
+orderSchema.index({ 'refunds.refundedOn': 1 }, { sparse: true })
 orderSchema.index(
   { user: 1, checkoutKey: 1 },
   { unique: true, partialFilterExpression: { checkoutKey: { $type: 'string' } } },
