@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../AuthContext.jsx'
 import { useCart } from '../CartContext.jsx'
+import { isBackInStock, useWishlist } from './ProductGrid.jsx'
 
 export function BrandLink() {
   return (
@@ -35,6 +36,8 @@ export function StoreSearch() {
 function Navbar() {
   const { user, loading, sessionError } = useAuth()
   const { count } = useCart()
+  const wishlist = useWishlist()
+  const backInStock = wishlist?.stockAlerts.filter(isBackInStock).length ?? 0
   const navClass = ({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'
 
   return (
@@ -48,8 +51,10 @@ function Navbar() {
         </div>
         <StoreSearch />
         <div className="nav-actions">
-          <NavLink to="/wishlist" className="account-link" aria-label="Wishlist" title="Wishlist">
+          <NavLink to="/wishlist" className="account-link"
+            aria-label={backInStock ? `Wishlist, ${backInStock} back in stock` : 'Wishlist'} title="Wishlist">
             <Heart size={18} aria-hidden="true" />
+            {backInStock > 0 && <span className="cart-count">{backInStock}</span>}
           </NavLink>
           <NavLink to="/cart" className="account-link" aria-label={`Cart, ${count} ${count === 1 ? 'item' : 'items'}`} title="Cart">
             <ShoppingBag size={18} aria-hidden="true" />

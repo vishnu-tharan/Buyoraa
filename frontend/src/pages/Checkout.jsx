@@ -6,7 +6,7 @@ import { useAuth } from '../AuthContext.jsx'
 import { useCart } from '../CartContext.jsx'
 import AddressFields, { collectAddress } from '../components/AddressFields.jsx'
 import { Loading, PageMessage } from '../components/Feedback.jsx'
-import OrderSummary from '../components/OrderSummary.jsx'
+import OrderSummary, { DeliveryEstimate } from '../components/OrderSummary.jsx'
 import { formatPrice } from '../components/ProductGrid.jsx'
 
 function savedCheckout(userId) {
@@ -28,9 +28,44 @@ function rememberCheckout(userId, key) {
   }
 }
 
+function DiscountEntry({ code, onChange, busy }) {
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState('')
+
+  function apply(event) {
+    event.preventDefault()
+    const value = draft.trim().toUpperCase()
+    if (!/^[A-Z0-9][A-Z0-9-]{2,23}$/.test(value)) {
+      setError('Enter a code of 3 to 24 letters, numbers or hyphens.')
+      return
+    }
+    setError('')
+    onChange(value)
+  }
+
+  return (
+    <form onSubmit={apply} className="account-form">
+      <label className="col-span-full">
+        Discount code
+        <input value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={24} disabled={busy} />
+      </label>
+      {error && <p className="form-error col-span-full" role="alert">{error}</p>}
+      <div className="col-span-full flex flex-wrap gap-2">
+        <button type="submit" className="button button-outline" disabled={busy || !draft.trim() || draft.trim().toUpperCase() === code}>Apply code</button>
+        {code && <button type="button" className="text-link" disabled={busy} onClick={() => {
+          onChange('')
+          setDraft('')
+          setError('')
+        }}>Remove code</button>}
+      </div>
+    </form>
+  )
+}
+
 function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
   const { items } = useCart()
-  const { data, previousData, loading, error, retry } = useApi('/cart/quote', JSON.stringify({ items }))
+  const [discountCode, setDiscountCode] = useState('')
+  const { data, previousData, loading, error, retry } = useApi('/cart/quote', JSON.stringify({ items, discountCode, includeDeliveryEstimate: true }))
   const quote = data ?? previousData
   const savedAddresses = user.addresses ?? []
   const defaultAddress = savedAddresses.find(({ _id }) => _id === user.defaultAddressId) ?? savedAddresses[0]
@@ -64,6 +99,7 @@ function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
         shippingAddress,
         deliveryInstructions: form.get('deliveryInstructions').trim(),
         checkoutKey: attempt.current,
+        discountCode,
         expectedTotal: data.totalAmount,
       })
       await onReceipt(placed.receipt)
@@ -120,10 +156,11 @@ function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
           <div>
             <h2>Cash on Delivery</h2>
             <p className="text-sm text-stone-600">Pay when your order arrives.</p>
+            <DeliveryEstimate estimate={quote.deliveryEstimate} />
           </div>
         </div>
         {notice && <p className="form-error" role="alert">{notice}</p>}
-        {!loading && !quote.canCheckout && <p className="text-brand-dark-red">Update the unavailable items in your cart before placing the order.</p>}
+        {!loading && !quote.canCheckout && !quote.discountError && <p className="text-brand-dark-red">Update the unavailable items in your cart before placing the order.</p>}
         <div className="flex flex-wrap gap-3">
           <button type="submit" className="button button-red" disabled={submitting || loading || !quote.canCheckout}>
             {submitting ? 'Placing order…' : 'Place order'}
@@ -132,6 +169,11 @@ function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
         </div>
       </form>
       <OrderSummary amounts={quote} loading={loading}>
+        <DiscountEntry code={discountCode} onChange={(code) => {
+          setNotice('')
+          setDiscountCode(code)
+        }} busy={submitting} />
+        {!loading && quote.discountError && <p className="form-error" role="alert">{quote.discountError}</p>}
         <ul className="order-lines">
           {quote.lines.map(({ productId, product, quantity, available, lineTotal }) => (
             <li key={productId}>

@@ -1,10 +1,12 @@
 import { Router } from 'express'
 import mongoose from 'mongoose'
-import { adminOverview, adminUsers } from '../controllers/adminController.js'
+import {
+  adminDeliveryEstimate, adminDiscounts, adminOverview, adminUsers, createDiscount, disableDiscount, updateDeliveryEstimate,
+} from '../controllers/adminController.js'
 import {
   adminProduct, adminProducts, adminStockHistory, deleteCategory, deleteProduct, restoreProduct, saveCategory, saveProduct,
 } from '../controllers/adminCatalogController.js'
-import { adminOrder, adminOrders, exportAdminOrders, updateOrderStatus } from '../controllers/adminOrdersController.js'
+import { addOrderNote, adminOrder, adminOrders, exportAdminOrders, updateOrderStatus } from '../controllers/adminOrdersController.js'
 import { requireAdmin, requireUser } from '../middleware/auth.js'
 
 const router = Router()
@@ -16,6 +18,11 @@ router.param('id', (request, response, next, id) => {
 })
 
 router.get('/overview', adminOverview)
+router.get('/delivery-estimate', adminDeliveryEstimate)
+router.put('/delivery-estimate', updateDeliveryEstimate)
+router.get('/discounts', adminDiscounts)
+router.post('/discounts', createDiscount)
+router.patch('/discounts/:id/disable', disableDiscount)
 router.get('/users', adminUsers)
 router.get('/products', adminProducts)
 router.get('/products/:id', adminProduct)
@@ -31,5 +38,6 @@ router.get('/orders', adminOrders)
 router.get('/orders/export', exportAdminOrders)
 router.get('/orders/:id', adminOrder)
 router.patch('/orders/:id/status', updateOrderStatus)
+router.post('/orders/:id/notes', addOrderNote)
 
 export default router

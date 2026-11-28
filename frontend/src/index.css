@@ -315,7 +315,8 @@ body {
 
 a.product-card:hover, a.product-card:focus-visible { border-color: var(--color-brand-red); }
 .product-card-media { position: relative; overflow: hidden; }
-.product-card-shell { position: relative; display: grid; min-width: 0; }
+.product-card-shell { position: relative; display: grid; grid-template-rows: 1fr auto; min-width: 0; }
+.product-card-actions { display: grid; align-content: start; gap: 0.35rem; padding-top: 0.5rem; }
 .product-heart { position: absolute; top: 0.55rem; right: 0.55rem; z-index: 2; text-align: right; }
 .product-heart-button {
   display: inline-grid;

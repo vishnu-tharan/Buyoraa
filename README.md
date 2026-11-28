@@ -107,6 +107,12 @@ npm.cmd run dev
 
 Open [Buyora](http://127.0.0.1:5173). The API health check is at [port 5000](http://127.0.0.1:5000/api/health). If the database is empty, the storefront shows empty catalog states.
 
+## Shop and place an order
+
+Use **Add to cart** on an in-stock product card to keep browsing without leaving the catalog. Signed-in shoppers can follow a sold-out product with **Notify me when in stock**. Their wishlist shows followed products, and the wishlist icon counts products that are currently back in stock.
+
+Customers can correct the recipient, address, phone number, or delivery instructions on an unpaid pending order. Admin confirmation locks those details.
+
 ## Use the admin dashboard
 
 1. Register a separate account through the storefront.
@@ -118,6 +124,12 @@ Add categories before products. Enter product prices in rupees and add one image
 In **Admin → Products**, choose **Archive** to hide a product from the store. Open **Archived**, select **Restore**, and confirm with **Restore product**. The original category is selected if it still exists. If it was deleted, choose a replacement category. Restoring keeps the product’s stock, past orders, and stock history.
 
 Orders move from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. Cancelling a pending or confirmed order restores stock. Marking an order delivered records its Cash on Delivery payment as paid. Customers can then open the order in **My orders** and choose **Print receipt** to print it or save a PDF.
+
+Admins can record private follow-ups under **Staff notes** on the order page.
+
+Set the checkout delivery window under **Admin → Overview → Delivery estimate**. It uses calendar days after ordering. New orders keep the estimate recorded at checkout.
+
+Use **Admin → Discounts** to create or disable fixed LKR discount codes. Each code has a minimum item subtotal and stays valid through its expiry date in Sri Lanka time. Checkout accepts one code per order and applies it to items before delivery. The order and receipt keep the discount applied at purchase.
 
 If a shipped order is refused or cannot be delivered, mark it **Delivery failed**. Stock stays reserved until the items return. Once all items are received back from a failed delivery or a delivered order, mark it **Returned** and choose whether to restock them. Restock only if every item can be sold again. Recording a return leaves the payment record and collected sales total intact. Handle any refund separately.
 

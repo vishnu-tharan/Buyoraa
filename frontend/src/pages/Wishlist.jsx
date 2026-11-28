@@ -1,18 +1,16 @@
 import { ShoppingBag, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { errorMessage } from '../api.js'
 import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage, Toast } from '../components/Feedback.jsx'
-import { formatPrice, ProductImage, useWishlist } from '../components/ProductGrid.jsx'
+import { formatPrice, isBackInStock, ProductImage, StockAlertToggle, useWishlist } from '../components/ProductGrid.jsx'
 
 export default function Wishlist() {
-  const { products, error, loading, retry, changeSaved } = useWishlist()
+  const { products, stockAlerts, error, loading, retry, changeSaved } = useWishlist()
   const { addItem } = useCart()
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState(null)
-
-  useEffect(() => { retry() }, [retry])
 
   async function removeProduct(product, moveToCart = false) {
     setNotice(null)
@@ -71,6 +69,22 @@ export default function Wishlist() {
             </li>
           ))}
         </ul>
+      )}
+      {stockAlerts.length > 0 && (
+        <section className="checkout-panel mt-5">
+          <h2>Stock alerts</h2>
+          <ul className="grid gap-3">
+            {stockAlerts.map((product) => (
+              <li className="flex flex-wrap items-center justify-between gap-2" key={product._id}>
+                <div>
+                  {product.archived ? <p>{product.name}</p> : <Link className="text-link" to={`/products/${product._id}`}>{product.name}</Link>}
+                  <p className="text-sm">{isBackInStock(product) ? 'Back in stock' : 'Currently unavailable'}</p>
+                </div>
+                <StockAlertToggle product={product} removeOnly />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </section>
   )

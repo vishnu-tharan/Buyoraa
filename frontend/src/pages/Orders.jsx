@@ -3,8 +3,9 @@ import { useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
 import { useCart } from '../CartContext.jsx'
+import AddressFields, { collectAddress } from '../components/AddressFields.jsx'
 import { Loading, PageMessage, Pagination } from '../components/Feedback.jsx'
-import OrderSummary, { orderPaymentLabel, orderStatusLabels, OrderStatusBadge } from '../components/OrderSummary.jsx'
+import OrderSummary, { DeliveryEstimate, orderPaymentLabel, orderStatusLabels, OrderStatusBadge } from '../components/OrderSummary.jsx'
 import { formatPrice } from '../components/ProductGrid.jsx'
 
 const orderDate = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium' })
@@ -213,6 +214,51 @@ function OrderCancellation({ orderId, onResult }) {
   )
 }
 
+function EditDelivery({ order, onSaved, onLocked, onClose }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const address = order.shippingAddress
+
+  async function save(event) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    setError('')
+    setSaving(true)
+    try {
+      await api.patch(`/orders/${order._id}/delivery`, {
+        shippingAddress: { ...collectAddress(form), name: form.get('name'), phone: form.get('phone') },
+        deliveryInstructions: form.get('deliveryInstructions'),
+      })
+      onSaved()
+    } catch (requestError) {
+      const message = errorMessage(requestError, 'We couldn’t save your delivery details. Try again.')
+      if (requestError.response?.status === 409) onLocked(message)
+      else setError(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={save}>
+      <fieldset className="account-form" disabled={saving}>
+        <label>Recipient name<input name="name" autoComplete="name" maxLength={100} defaultValue={address.name} required /></label>
+        <label>Phone number<input name="phone" type="tel" autoComplete="tel" maxLength={30} defaultValue={address.phone} required /></label>
+        <AddressFields address={address} />
+        <label className="col-span-full">
+          Delivery instructions (optional)
+          <textarea name="deliveryInstructions" rows={3} maxLength={300} defaultValue={order.deliveryInstructions ?? ''} />
+        </label>
+        {error && <p className="form-error col-span-full" role="alert">{error}</p>}
+        <div className="col-span-full flex flex-wrap gap-3">
+          <button type="submit" className="button button-red">{saving ? 'Saving…' : 'Save delivery details'}</button>
+          <button type="button" className="button button-outline" onClick={onClose}>Cancel edit</button>
+        </div>
+      </fieldset>
+    </form>
+  )
+}
+
 function Receipt({ order, orderNumber }) {
   return (
     <article className="print-document customer-receipt">
@@ -237,6 +283,7 @@ function Receipt({ order, orderNumber }) {
       <h2>Payment summary</h2>
       <p>Subtotal · {formatPrice(order.subtotal)}</p>
       <p>Delivery · {formatPrice(order.shippingFee)}</p>
+      {order.discountAmount > 0 && <p>Discount ({order.discountCode}) · −{formatPrice(order.discountAmount)}</p>}
       <p><strong>Amount paid · {formatPrice(order.totalAmount)}</strong></p>
     </article>
   )
@@ -246,6 +293,8 @@ function OrderPage({ confirmation = false }) {
   const { id } = useParams()
   const { data, loading, error, retry } = useApi(`/orders/${encodeURIComponent(id)}`)
   const [cancellation, setCancellation] = useState(null)
+  const [editingDelivery, setEditingDelivery] = useState(null)
+  const [deliveryNotice, setDeliveryNotice] = useState(null)
 
   if (loading) return <Loading label="Loading your order…" />
   if (error) {
@@ -309,6 +358,7 @@ function OrderPage({ confirmation = false }) {
           <h2>Order status</h2>
           <OrderStatusBadge status={order.orderStatus} />
           <OrderProgress order={order} />
+          {['pending', 'confirmed', 'shipped'].includes(order.orderStatus) && <DeliveryEstimate estimate={order.deliveryEstimate} />}
           {cancellationNotice && (
             <p className={cancellationError ? 'form-error' : 'text-sm'} role={cancellationError ? 'alert' : 'status'}>
               {cancelled ? 'Your order was cancelled.' : cancellationNotice.message}
@@ -325,6 +375,7 @@ function OrderPage({ confirmation = false }) {
             ))}
           </ul>
           <h2>Delivery address</h2>
+          {deliveryNotice?.id === id && <p role={deliveryNotice.error ? 'alert' : 'status'}>{deliveryNotice.message}</p>}
           <address className="not-italic text-stone-600">
             {address.name}<br />
             {address.street}<br />
@@ -338,6 +389,28 @@ function OrderPage({ confirmation = false }) {
               <p className="whitespace-pre-wrap wrap-anywhere text-stone-600">{order.deliveryInstructions}</p>
             </div>
           )}
+          {canCancel && (editingDelivery === id ? (
+            <EditDelivery
+              key={id}
+              order={order}
+              onSaved={() => {
+                setEditingDelivery(null)
+                setDeliveryNotice({ id, message: 'Delivery details saved.' })
+                retry()
+              }}
+              onLocked={(message) => {
+                setEditingDelivery(null)
+                setDeliveryNotice({ id, message, error: true })
+                retry()
+              }}
+              onClose={() => setEditingDelivery(null)}
+            />
+          ) : (
+            <button type="button" className="button button-outline" onClick={() => {
+              setDeliveryNotice(null)
+              setEditingDelivery(id)
+            }}>Edit delivery details</button>
+          ))}
         </div>
         <OrderSummary amounts={order}>
           <p>Cash on Delivery · {paymentLabel}</p>

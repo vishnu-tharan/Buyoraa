@@ -5,7 +5,7 @@ import { api, errorMessage, rememberProduct, useApi } from '../api.js'
 import { SessionError, useAuth } from '../AuthContext.jsx'
 import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage, Toast } from '../components/Feedback.jsx'
-import ProductGrid, { formatPrice, ProductGridSkeleton, ProductImage, ProductRating, WishlistToggle } from '../components/ProductGrid.jsx'
+import ProductGrid, { formatPrice, ProductGridSkeleton, ProductImage, ProductRating, StockAlertToggle, WishlistToggle } from '../components/ProductGrid.jsx'
 
 function pageLink(params, page) {
   const nextParams = new URLSearchParams(params)
@@ -251,6 +251,7 @@ function ProductActions({ product, catalogReturn }) {
           <ShoppingBag size={17} aria-hidden="true" /> Add to cart
         </button>
         {!loading && user && <WishlistToggle product={product} />}
+        {!loading && user && <StockAlertToggle product={product} />}
         {!loading && !user && (
           <Link to="/login" state={{ from: `/products/${product._id}`, catalogReturn }} className="button button-outline">
             <Heart size={17} aria-hidden="true" /> Sign in to save

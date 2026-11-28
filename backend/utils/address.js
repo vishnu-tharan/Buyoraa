@@ -20,3 +20,16 @@ export function readPhone(input) {
 
   return phone
 }
+
+export function readDeliveryDetails({ shippingAddress, deliveryInstructions = '' }) {
+  const address = readAddress(shippingAddress)
+  const name = typeof shippingAddress?.name === 'string' ? shippingAddress.name.trim() : ''
+  const phone = readPhone(shippingAddress?.phone)
+  if (!address || !name || name.length > 100 || !phone) {
+    return { error: 'Enter a complete delivery address and a valid contact number.' }
+  }
+  if (typeof deliveryInstructions !== 'string' || deliveryInstructions.trim().length > 300) {
+    return { error: 'Use up to 300 characters for delivery instructions.' }
+  }
+  return { delivery: { ...address, name, phone }, instructions: deliveryInstructions.trim() || undefined }
+}

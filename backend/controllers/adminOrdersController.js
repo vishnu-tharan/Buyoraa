@@ -115,9 +115,23 @@ export async function exportAdminOrders(request, response) {
 }
 
 export async function adminOrder(request, response) {
-  const order = await Order.findById(request.params.id).select('+returnRestocked').populate('user', 'name email').lean()
+  const order = await Order.findById(request.params.id).select('+returnRestocked +adminNotes').populate('user', 'name email').lean()
   if (!order) return response.status(404).json({ message: 'Order not found.' })
   response.json({ order, allowedStatuses: nextStatuses[order.orderStatus] })
+}
+
+export async function addOrderNote(request, response) {
+  const text = typeof request.body?.text === 'string' ? request.body.text.trim() : ''
+  if (!text || text.length > 500) {
+    return response.status(400).json({ message: 'Write a note of 1 to 500 characters.' })
+  }
+  const id = request.params.id
+  const result = await Order.findOneAndUpdate({ _id: id, 'adminNotes.49': { $exists: false } }, {
+    $push: { adminNotes: { text, author: request.user.name, createdAt: new Date() } },
+  }, { returnDocument: 'after', runValidators: true, timestamps: false }).select('+adminNotes').lean()
+  if (result) return response.status(201).json({ note: result.adminNotes.at(-1) })
+  if (!(await Order.exists({ _id: id }))) return response.status(404).json({ message: 'Order not found.' })
+  response.status(409).json({ message: 'This order already has 50 staff notes.' })
 }
 
 export async function updateOrderStatus(request, response) {

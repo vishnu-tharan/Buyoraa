@@ -161,6 +161,51 @@ function OrderStatusForm({ allowedStatuses, saving, onSubmit }) {
   )
 }
 
+function AdminNotes({ order, onSaved }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const notes = order.adminNotes ?? []
+
+  async function save(event) {
+    event.preventDefault()
+    const text = new FormData(event.currentTarget).get('text').trim()
+    setSaving(true)
+    setError('')
+    try {
+      await api.post(`/admin/orders/${order._id}/notes`, { text })
+      onSaved()
+    } catch (requestError) {
+      setError(errorMessage(requestError, 'We couldn’t save the note. Try again.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="checkout-panel">
+      <h2>Staff notes</h2>
+      <p className="text-sm text-stone-600">Visible only to admins.</p>
+      {notes.length > 0 && (
+        <ul className="grid gap-3">
+          {notes.toReversed().map(({ _id, text, author, createdAt }) => (
+            <li key={_id}>
+              <p className="text-sm text-stone-600">{author} · {dateFormat.format(new Date(createdAt))}</p>
+              <p className="whitespace-pre-wrap wrap-anywhere">{text}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {notes.length < 50 ? (
+        <form className="account-form" onSubmit={save}>
+          <label className="col-span-full">Add a note<textarea name="text" rows={3} maxLength={500} required disabled={saving} /></label>
+          {error && <p className="form-error col-span-full" role="alert">{error}</p>}
+          <button type="submit" className="button button-outline" disabled={saving}>{saving ? 'Saving…' : 'Save note'}</button>
+        </form>
+      ) : <p>This order has reached the 50-note limit.</p>}
+    </section>
+  )
+}
+
 export function AdminOrderDetails() {
   const { id } = useParams()
   const { data, error, loading, retry } = useApi(`/admin/orders/${encodeURIComponent(id)}`)
@@ -236,6 +281,12 @@ export function AdminOrderDetails() {
             <OrderStatusForm key={`${id}-${order.orderStatus}`} allowedStatuses={allowedStatuses} saving={saving} onSubmit={saveStatus} />
           )}
         </OrderSummary>
+      </div>
+      <div className="mt-5">
+        <AdminNotes key={id} order={order} onSaved={() => {
+          setNotice({ message: 'Staff note saved.' })
+          retry()
+        }} />
       </div>
       {canPrint && <PackingSlip order={order} />}
     </section>

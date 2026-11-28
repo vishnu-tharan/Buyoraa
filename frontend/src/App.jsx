@@ -3,7 +3,7 @@ import { SessionError, useAuth } from './AuthContext.jsx'
 import { Loading, PageMessage } from './components/Feedback.jsx'
 import StoreLayout from './components/StoreLayout.jsx'
 import { Account, AuthForm } from './pages/Account.jsx'
-import AdminOverview, { AdminLayout, AdminUsers } from './pages/Admin.jsx'
+import AdminOverview, { AdminDiscounts, AdminLayout, AdminUsers } from './pages/Admin.jsx'
 import AdminCategories from './pages/AdminCategories.jsx'
 import { AdminOrderDetails, AdminOrders } from './pages/AdminOrders.jsx'
 import { AdminProductForm, AdminProducts } from './pages/AdminProducts.jsx'
@@ -66,6 +66,7 @@ export default function App() {
           <Route path="categories" element={<AdminCategories />} />
           <Route path="orders" element={<AdminOrders />} />
           <Route path="orders/:id" element={<AdminOrderDetails />} />
+          <Route path="discounts" element={<AdminDiscounts />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="*" element={<PageMessage linkTo="/admin" linkLabel="Back to overview">Admin page not found.</PageMessage>} />
         </Route>

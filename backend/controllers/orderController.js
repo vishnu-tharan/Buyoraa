@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
 import mongoose from 'mongoose'
-import Order, { orderStatuses } from '../models/Order.js'
+import Order, { getDeliveryEstimate, orderStatuses, readDiscountCode } from '../models/Order.js'
 import Product, { activeProducts, StockChange } from '../models/Product.js'
 import User from '../models/User.js'
-import { readAddress, readPhone } from '../utils/address.js'
+import { readDeliveryDetails } from '../utils/address.js'
 import { calculateCart, validateCartItems } from './cartController.js'
 
 const checkoutKeyPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/
@@ -126,7 +126,7 @@ export async function checkoutAttempt(request, response) {
 }
 
 export async function placeOrder(request, response) {
-  const { items, shippingAddress, expectedTotal, checkoutKey, deliveryInstructions = '' } = request.body ?? {}
+  const { items, expectedTotal, checkoutKey, discountCode = '' } = request.body ?? {}
   const cart = validateCartItems(items)
   if (cart.error || !cart.items.length) {
     return response.status(400).json({ message: cart.error || 'Your cart is empty.' })
@@ -136,21 +136,13 @@ export async function placeOrder(request, response) {
     return response.status(400).json({ message: 'Review your checkout details and try again.' })
   }
 
-  const address = readAddress(shippingAddress)
-  const name = typeof shippingAddress?.name === 'string' ? shippingAddress.name.trim() : ''
-  const phone = readPhone(shippingAddress?.phone)
-  if (!address || !name || name.length > 100 || !phone) {
-    return response.status(400).json({ message: 'Enter a complete delivery address and a valid contact number.' })
-  }
-  if (typeof deliveryInstructions !== 'string' || deliveryInstructions.trim().length > 300) {
-    return response.status(400).json({ message: 'Use up to 300 characters for delivery instructions.' })
-  }
-
-  const delivery = { ...address, name, phone }
-  const instructions = deliveryInstructions.trim() || undefined
+  const { delivery, instructions, error } = readDeliveryDetails(request.body ?? {})
+  if (error) return response.status(400).json({ message: error })
+  const code = readDiscountCode(discountCode)
+  if (code === null) return response.status(400).json({ message: 'Enter a valid discount code.' })
   const sortedItems = cart.items.toSorted((first, second) => first.productId.localeCompare(second.productId))
   const checkoutFingerprint = createHash('sha256')
-    .update(JSON.stringify({ items: sortedItems, delivery, instructions }))
+    .update(JSON.stringify({ items: sortedItems, delivery, instructions, discountCode: code || undefined }))
     .digest('hex')
   const user = request.user.id
 
@@ -160,7 +152,9 @@ export async function placeOrder(request, response) {
       const previousOrder = await findAttempt(user, checkoutKey, session)
       if (previousOrder) return { order: previousOrder }
 
-      const quote = await calculateCart(sortedItems, session)
+      const quote = await calculateCart(sortedItems, session, code)
+      if (quote.discountError) return { message: quote.discountError }
+      if (!Number.isSafeInteger(quote.subtotal)) return { message: 'The cart total is too large. Reduce the quantities and try again.' }
       if (!quote.canCheckout) return { message: 'Stock has changed. Review the quantities in your cart.' }
       if (quote.totalAmount !== expectedTotal) return { message: 'The total has changed. Review the updated price before placing your order.' }
 
@@ -183,6 +177,9 @@ export async function placeOrder(request, response) {
       const [order] = await Order.create([{
         user, orderItems, shippingAddress: delivery, checkoutKey, checkoutFingerprint,
         deliveryInstructions: instructions,
+        deliveryEstimate: await getDeliveryEstimate(session) ?? undefined,
+        discountCode: quote.discountCode,
+        discountAmount: quote.discountAmount || undefined,
         subtotal: quote.subtotal, shippingFee: quote.shippingFee, totalAmount: quote.totalAmount,
       }], { session })
       await StockChange.insertMany(changes.map((change) => ({ ...change, order: order._id })), { session })
@@ -275,4 +272,21 @@ export async function cancelOrder(request, response) {
   const result = await changeOrderStatus({ orderId: id, status: 'cancelled', customerId: request.user.id })
   if (result.message) return response.status(result.httpStatus).json({ message: result.message })
   response.sendStatus(result.httpStatus)
+}
+
+export async function updateDelivery(request, response) {
+  const { id } = request.params
+  if (!mongoose.isObjectIdOrHexString(id)) return response.status(400).json({ message: 'Enter a valid order ID.' })
+
+  const { delivery, instructions, error } = readDeliveryDetails(request.body ?? {})
+  if (error) return response.status(400).json({ message: error })
+
+  const owner = { _id: id, user: request.user.id }
+  const changes = { $set: { shippingAddress: delivery } }
+  if (instructions) changes.$set.deliveryInstructions = instructions
+  else changes.$unset = { deliveryInstructions: 1 }
+  const result = await Order.updateOne({ ...owner, orderStatus: 'pending', paymentStatus: 'pending' }, changes)
+  if (result.matchedCount) return response.sendStatus(204)
+  if (!(await Order.exists(owner))) return response.status(404).json({ message: 'Order not found.' })
+  response.status(409).json({ message: 'You can only edit delivery details while the order is unpaid and pending.' })
 }
