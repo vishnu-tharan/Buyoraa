@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 import Category from '../models/Category.js'
-import Product, { activeProducts, StockChange } from '../models/Product.js'
+import Product, { activeProducts, restockStockLimit, StockChange } from '../models/Product.js'
 import { escapeSearch, readPage } from '../utils/query.js'
 
 function readText(value) {
@@ -46,11 +46,14 @@ function categoryFields(input = {}) {
 }
 
 export async function adminProducts(request, response) {
-  const { page: requestedPage, lowStock, archived, q = '', category } = request.query
+  const { page: requestedPage, stock, lowStock, archived, q = '', category } = request.query
   const page = readPage(requestedPage)
   if (!page) return response.status(400).json({ message: 'Enter a valid page number.' })
   if (lowStock !== undefined && lowStock !== 'true' && lowStock !== 'false') {
     return response.status(400).json({ message: 'Low stock must be true or false.' })
+  }
+  if (stock !== undefined && stock !== 'low' && stock !== 'restock') {
+    return response.status(400).json({ message: 'Choose a valid stock filter.' })
   }
   if (archived !== undefined && archived !== 'true' && archived !== 'false') {
     return response.status(400).json({ message: 'Archived must be true or false.' })
@@ -63,7 +66,8 @@ export async function adminProducts(request, response) {
   }
 
   const filters = archived === 'true' ? { archived: true } : { ...activeProducts }
-  if (lowStock === 'true') filters.stock = { $gte: 1, $lte: 5 }
+  if (stock === 'restock') filters.stock = { $lte: restockStockLimit }
+  else if (stock === 'low' || lowStock === 'true') filters.stock = { $gte: 1, $lte: restockStockLimit }
   if (category) filters.category = category
   const search = q.trim()
   if (search) filters.name = { $regex: escapeSearch(search), $options: 'i' }

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 
 export const activeProducts = { archived: { $ne: true } }
+export const restockStockLimit = 5
 
 const productSchema = new mongoose.Schema(
   {

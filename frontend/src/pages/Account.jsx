@@ -1,10 +1,41 @@
-import { LogOut, ShieldCheck, UserRound } from 'lucide-react'
-import { useState } from 'react'
+import { Eye, EyeOff, LogOut, ShieldCheck, UserRound } from 'lucide-react'
+import { useId, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { api, errorMessage } from '../api.js'
 import { SessionError, useAuth } from '../AuthContext.jsx'
 import AddressFields, { collectAddress } from '../components/AddressFields.jsx'
 import { Loading } from '../components/Feedback.jsx'
+
+function PasswordField({ name, label, autoComplete, minLength, hint }) {
+  const id = useId()
+  const [visible, setVisible] = useState(false)
+  const Icon = visible ? EyeOff : Eye
+
+  return (
+    <div className="password-field">
+      <label htmlFor={id}>{label}</label>
+      <div className="password-control">
+        <input
+          id={id}
+          name={name}
+          type={visible ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          minLength={minLength}
+          aria-describedby={hint ? `${id}-hint` : undefined}
+          required
+        />
+        <button type="button" aria-controls={id} aria-label={`${visible ? 'Hide' : 'Show'} ${label.toLowerCase()}`}
+          onClick={() => setVisible((current) => !current)}>
+          <Icon size={19} aria-hidden="true" />
+        </button>
+      </div>
+      {hint && <span className="field-hint" id={`${id}-hint`}>{hint}</span>}
+    </div>
+  )
+}
 
 export function AuthForm({ registerMode = false }) {
   const { user, loading, sessionError, register, signIn } = useAuth()
@@ -15,7 +46,7 @@ export function AuthForm({ registerMode = false }) {
   const from = state?.from
   const allowedReturn = typeof from === 'string'
     && /^\/(?:admin(?:\/(?:products|categories|orders|users|discounts|sales-report)(?:\/(?:new|[a-f0-9]{24}))?)?(?:\?.*)?|wishlist|cart|checkout|orders(?:\/[a-f0-9]{24}(?:\/success)?)?(?:\?[^#]*)?|products\/[a-f0-9]{24})$/i.test(from)
-  const destination = allowedReturn ? from : '/account'
+  const destination = allowedReturn ? from : '/'
   const title = registerMode ? 'Create your account' : 'Sign in'
 
   if (loading) return <Loading label="Checking your account…" />
@@ -72,17 +103,13 @@ export function AuthForm({ registerMode = false }) {
           Email
           <input type="email" name="email" autoComplete="email" maxLength={254} required />
         </label>
-        <label>
-          Password
-          <input
-            type="password"
-            name="password"
-            autoComplete={registerMode ? 'new-password' : 'current-password'}
-            minLength={registerMode ? 8 : undefined}
-            required
-          />
-          {registerMode && <span className="field-hint">Use at least 8 characters.</span>}
-        </label>
+        <PasswordField
+          name="password"
+          label="Password"
+          autoComplete={registerMode ? 'new-password' : 'current-password'}
+          minLength={registerMode ? 8 : undefined}
+          hint={registerMode ? 'Use at least 8 characters.' : undefined}
+        />
         {error && <p className="form-error" role="alert">{error}</p>}
         <button type="submit" className="button button-red" disabled={submitting}>
           {submitting ? 'Please wait…' : registerMode ? 'Create account' : 'Sign in'}
@@ -191,6 +218,7 @@ function ProfileSettings({ user }) {
 function PasswordSettings() {
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState(null)
+  const [formVersion, setFormVersion] = useState(0)
 
   async function savePassword(event) {
     event.preventDefault()
@@ -213,7 +241,7 @@ function PasswordSettings() {
     setNotice(null)
     try {
       await api.patch('/auth/password', { currentPassword, newPassword })
-      form.reset()
+      setFormVersion((current) => current + 1)
       setNotice({ message: 'Password changed. Your other sessions have been signed out.' })
     } catch (requestError) {
       setNotice({ error: true, message: errorMessage(requestError, 'We couldn’t change your password. Try again.') })
@@ -226,20 +254,10 @@ function PasswordSettings() {
     <section className="account-section" aria-labelledby="password-heading">
       <h2 id="password-heading">Change password</h2>
       <form onSubmit={savePassword}>
-        <fieldset className="account-form" disabled={saving}>
-          <label>
-            Current password
-            <input name="currentPassword" type="password" autoComplete="current-password" required />
-          </label>
-          <label>
-            New password
-            <input name="newPassword" type="password" autoComplete="new-password" minLength={8} required />
-            <span className="field-hint">Use at least 8 characters.</span>
-          </label>
-          <label>
-            Confirm new password
-            <input name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required />
-          </label>
+        <fieldset key={formVersion} className="account-form" disabled={saving}>
+          <PasswordField name="currentPassword" label="Current password" autoComplete="current-password" />
+          <PasswordField name="newPassword" label="New password" autoComplete="new-password" minLength={8} hint="Use at least 8 characters." />
+          <PasswordField name="confirmPassword" label="Confirm new password" autoComplete="new-password" minLength={8} />
           <button className="button button-outline" type="submit">
             {saving ? 'Changing password…' : 'Change password'}
           </button>

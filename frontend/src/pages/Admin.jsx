@@ -1,10 +1,10 @@
-import { ChartColumn, ClipboardList, LayoutDashboard, Package, Tag, Tags, UsersRound } from 'lucide-react'
-import { useState } from 'react'
-import { Link, NavLink, Outlet, useSearchParams } from 'react-router'
+import { ChartColumn, ClipboardList, LayoutDashboard, Menu, Package, Tag, Tags, UsersRound, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
 import { Loading, PageMessage, Pagination } from '../components/Feedback.jsx'
 import { formatPrice } from '../components/ProductGrid.jsx'
-import { BrandLink, StoreSearch } from '../components/StoreLayout.jsx'
+import { AccountLink } from '../components/StoreLayout.jsx'
 import { AdminOrdersTable } from './AdminOrders.jsx'
 
 const dateFormat = new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium' })
@@ -22,49 +22,92 @@ const adminLinks = [
   { path: '/admin/users', label: 'Customers', Icon: UsersRound },
 ]
 
-function AdminSidebar() {
+function AdminNavigation() {
+  const location = useLocation()
+  const [openedAt, setOpenedAt] = useState(null)
+  const button = useRef(null)
+  const open = openedAt === location.key
+  const Icon = open ? X : Menu
+
+  function closeMenu() {
+    if (!open) return
+    setOpenedAt(null)
+    button.current?.focus()
+  }
+
   return (
-    <nav aria-label="Admin navigation" className="admin-sidebar">
-      {adminLinks.map(({ path, label, Icon }) => (
-        <NavLink end={path === '/admin'} key={path} to={path}>
-          <Icon size={18} aria-hidden="true" /> {label}
-        </NavLink>
-      ))}
-    </nav>
+    <div className="admin-navigation" data-open={open} onKeyDown={(event) => {
+      if (event.key === 'Escape') closeMenu()
+    }}>
+      <button ref={button} type="button" className="button button-outline admin-menu-toggle"
+        aria-expanded={open} aria-controls="admin-navigation" onClick={() => setOpenedAt(open ? null : location.key)}>
+        <Icon size={18} aria-hidden="true" /> Admin menu
+      </button>
+      <nav id="admin-navigation" aria-label="Admin navigation" className="admin-sidebar">
+        {adminLinks.map(({ path, label, Icon: LinkIcon }) => (
+          <NavLink end={path === '/admin'} key={path} to={path} onClick={closeMenu}>
+            <LinkIcon size={18} aria-hidden="true" /> {label}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
   )
 }
 
 export function AdminLayout() {
+  const { pathname } = useLocation()
+  useEffect(() => { window.scrollTo(0, 0) }, [pathname])
+
   return (
     <div className="shell admin-layout">
       <header className="admin-header">
-        <BrandLink />
-        <StoreSearch />
-        <Link to="/account" className="text-link">My account</Link>
+        <Link to="/admin" className="brand-link">
+          <span className="brand-icon"><LayoutDashboard size={19} aria-hidden="true" /></span>
+          Buyora Admin
+        </Link>
+        <div className="admin-header-links">
+          <Link to="/" className="text-link">View store</Link>
+          <AccountLink />
+        </div>
       </header>
       <div className="admin-workspace">
-        <AdminSidebar />
+        <AdminNavigation />
         <main className="min-w-0"><Outlet /></main>
       </div>
     </div>
   )
 }
 
+function PendingOrders({ count }) {
+  return (
+    <section className="checkout-panel admin-task-card">
+      <h2><ClipboardList size={20} aria-hidden="true" /> Pending orders</h2>
+      <p className="admin-task-count">{count}</p>
+      <p>{count === 0 ? 'No orders are waiting for confirmation.' : 'Review these orders before confirming them.'}</p>
+      <Link to="/admin/orders?status=pending" className="button button-red">View pending orders</Link>
+    </section>
+  )
+}
+
 function RestockNotice({ count, products }) {
   return (
-    <section className="checkout-panel">
-      <h2>Needs restocking</h2>
+    <section className="checkout-panel admin-task-card">
+      <h2><Package size={20} aria-hidden="true" /> Needs restocking</h2>
+      <p className="admin-task-count">{count}</p>
       {count ? (
         <>
-          <p className="text-sm">{count} {count === 1 ? 'product has' : 'products have'} 5 units or fewer.</p>
+          <p>Active products with 5 units or fewer.</p>
           <ul className="order-lines">
             {products.map(({ _id, name, stock }) => (
-              <li key={_id}><Link to={`/admin/products/${_id}`} className="text-link">{name}</Link><span>{stock === 0 ? 'Sold out' : `${stock} left`}</span></li>
+              <li key={_id}>
+                <Link to={`/admin/products/${_id}`} className="text-link">{name}</Link>
+                <span className="admin-stock-warning">{stock === 0 ? 'Sold out' : `${stock} left`}</span>
+              </li>
             ))}
           </ul>
-          {count > products.length && <Link to="/admin/products" className="text-link">View products</Link>}
         </>
-      ) : <p className="text-sm">All active products have more than 5 units.</p>}
+      ) : <p>No active products need restocking.</p>}
+      <Link to="/admin/products?stock=restock" className="button button-outline">View products to restock</Link>
     </section>
   )
 }
@@ -86,6 +129,7 @@ function SalesChart({ sales }) {
           </li>
         ))}
       </ol>
+      <Link to="/admin/sales-report" className="text-link">View sales report</Link>
     </section>
   )
 }
@@ -139,26 +183,29 @@ export default function AdminOverview() {
       {loading && <Loading label="Loading dashboard…" />}
       {error && <PageMessage error onRetry={retry}>{errorMessage(error, 'We couldn’t load the dashboard.')}</PageMessage>}
       {data && (
-        <>
+        <div className="admin-dashboard">
+          <div className="admin-task-grid">
+            <PendingOrders count={data.pendingOrderCount} />
+            <RestockNotice count={data.lowStockCount} products={data.lowStockProducts} />
+          </div>
           <dl className="admin-stats">
             <div><dt>Active products</dt><dd>{data.productCount}</dd></div>
             <div><dt>Customers</dt><dd>{data.customerCount}</dd></div>
             <div><dt>Orders</dt><dd>{data.orderCount}</dd></div>
             <div><dt>Collected sales</dt><dd>{formatPrice(data.revenue)}</dd></div>
           </dl>
-          <div className="admin-insights">
-            <RestockNotice count={data.lowStockCount} products={data.lowStockProducts} />
-            <SalesChart sales={data.sales} />
-          </div>
+          <SalesChart sales={data.sales} />
+          <section>
+            <div className="section-heading">
+              <h2>Recent orders</h2>
+              <Link to="/admin/orders" className="text-link">View all orders</Link>
+            </div>
+            {data.recentOrders.length
+              ? <AdminOrdersTable orders={data.recentOrders} />
+              : <PageMessage>No orders have been placed yet.</PageMessage>}
+          </section>
           <DeliverySettings />
-          <div className="section-heading mt-6">
-            <h2>Recent orders</h2>
-            <Link to="/admin/orders" className="text-link">View all orders</Link>
-          </div>
-          {data.recentOrders.length
-            ? <AdminOrdersTable orders={data.recentOrders} />
-            : <PageMessage>No orders have been placed yet.</PageMessage>}
-        </>
+        </div>
       )}
     </section>
   )

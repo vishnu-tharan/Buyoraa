@@ -21,7 +21,7 @@ export function AdminProducts() {
   const { data, error, loading, retry } = useApi(`/admin/products?${params}`)
   const categories = useApi('/categories')
   const archived = params.get('archived') === 'true'
-  const lowStock = params.get('lowStock') === 'true'
+  const stock = params.get('stock') ?? (params.get('lowStock') === 'true' ? 'low' : '')
   const search = params.get('q') ?? ''
   const category = params.get('category') ?? ''
   const [removing, setRemoving] = useState(false)
@@ -72,7 +72,7 @@ export function AdminProducts() {
         <Link className={`button ${archived ? 'button-outline' : 'button-red'}`} to={productView(false)} aria-current={archived ? undefined : 'page'}>Active</Link>
         <Link className={`button ${archived ? 'button-red' : 'button-outline'}`} to={productView(true)} aria-current={archived ? 'page' : undefined}>Archived</Link>
       </nav>
-      <form className="admin-search" key={JSON.stringify([search, category, lowStock])} onSubmit={applyFilters}>
+      <form className="admin-search admin-list-filters" aria-label="Product filters" key={JSON.stringify([search, category, stock])} onSubmit={applyFilters}>
         <label>Product name<input name="q" type="search" maxLength={100} defaultValue={search} /></label>
         <label>
           Category
@@ -82,12 +82,16 @@ export function AdminProducts() {
             {categories.data?.categories.map(({ _id, name }) => <option key={_id} value={_id}>{name}</option>)}
           </select>
         </label>
-        <label className="admin-product-stock-filter">
-          <input name="lowStock" type="checkbox" value="true" defaultChecked={lowStock} />
-          Low stock only (1–5 units)
+        <label>
+          Stock
+          <select name="stock" defaultValue={stock}>
+            <option value="">All stock levels</option>
+            <option value="low">Low stock (1–5)</option>
+            <option value="restock">Needs restocking (0–5)</option>
+          </select>
         </label>
         <button className="button button-red" type="submit">Apply filters</button>
-        {(search || category || lowStock) && <Link className="text-link" to={archived ? '/admin/products?archived=true' : '/admin/products'}>Clear filters</Link>}
+        {(search || category || stock) && <Link className="text-link" to={archived ? '/admin/products?archived=true' : '/admin/products'}>Clear filters</Link>}
       </form>
       {categories.error && <PageMessage error onRetry={categories.retry}>We couldn’t load the categories.</PageMessage>}
       {displayedNotice && (
@@ -99,7 +103,7 @@ export function AdminProducts() {
         <PageMessage>No {archived ? 'archived' : 'active'} products match these filters.</PageMessage>
       )}
       {data?.products.length > 0 && (
-        <div className="admin-table">
+        <div className="admin-table" role="region" aria-label="Products table" tabIndex={0}>
           <table>
             <thead>
               <tr><th scope="col">Product</th><th scope="col">Category</th><th scope="col">Price</th><th scope="col">Stock</th><th scope="col">Actions</th></tr>
@@ -113,7 +117,7 @@ export function AdminProducts() {
                   </div></td>
                   <td>{product.category?.name ?? 'Category unavailable'}</td>
                   <td>{formatPrice(product.price)}</td>
-                  <td>{product.stock}</td>
+                  <td>{product.stock <= 5 ? <span className="admin-stock-warning">{product.stock === 0 ? 'Sold out' : `${product.stock} left`}</span> : product.stock}</td>
                   <td><div className="admin-actions">
                     <Link to={`/admin/products/${product._id}`} className="text-link" aria-label={`${archived ? 'Restore' : 'Edit'} ${product.name}`}>
                       {archived ? 'Restore' : 'Edit'}

@@ -33,8 +33,23 @@ export function StoreSearch() {
   )
 }
 
-function Navbar() {
+export function AccountLink() {
   const { user, loading, sessionError } = useAuth()
+  const name = user?.name
+  const label = name ? `My account, ${name}` : undefined
+
+  return (
+    <Link to={user || sessionError ? '/account' : '/login'} className="account-link account-nav-link"
+      aria-label={label} title={label}>
+      <UserRound size={17} aria-hidden="true" />
+      {name ? <span className="account-nav-name" dir="auto">{name}</span> : (
+        <span className="sr-only min-[360px]:not-sr-only">{loading || user || sessionError ? 'Account' : 'Sign in'}</span>
+      )}
+    </Link>
+  )
+}
+
+function Navbar() {
   const { count } = useCart()
   const wishlist = useWishlist()
   const backInStock = wishlist?.stockAlerts.filter(isBackInStock).length ?? 0
@@ -60,10 +75,7 @@ function Navbar() {
             <ShoppingBag size={18} aria-hidden="true" />
             <span className="cart-count">{count}</span>
           </NavLink>
-          <Link to={user || sessionError ? '/account' : '/login'} className="account-link">
-            <UserRound size={17} aria-hidden="true" />
-            <span className="sr-only min-[360px]:not-sr-only">{loading || user || sessionError ? 'Account' : 'Sign in'}</span>
-          </Link>
+          <AccountLink />
         </div>
       </nav>
     </header>

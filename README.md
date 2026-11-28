@@ -123,7 +123,7 @@ Add categories before products. Enter product prices in rupees and add one image
 
 In **Admin → Products**, choose **Archive** to hide a product from the store. Open **Archived**, select **Restore**, and confirm with **Restore product**. The original category is selected if it still exists. If it was deleted, choose a replacement category. Restoring keeps the product’s stock, past orders, and stock history.
 
-Search active or archived products by name and combine the search with a category and the low-stock filter.
+Search active or archived products by name and combine the search with a category and stock filter. **Low stock** shows 1–5 units. **Needs restocking** also includes sold-out products.
 
 Orders move from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. Cancelling a pending or confirmed order restores stock. Marking an order delivered records its Cash on Delivery payment as paid. Customers can then open the order in **My orders** and choose **Print receipt** to print it or save a PDF.
 
@@ -141,7 +141,7 @@ Select pending orders on the current page and choose **Confirm selected** to con
 
 Open a product from the **Active** or **Archived** view to see **Stock history**. It records changes from product creation, manual stock edits, orders, cancellations, and restocked returns.
 
-The admin overview shows up to five active products that have five units or fewer and the total number that need restocking. The seven-day chart groups collected sales by payment date in Sri Lanka time. Older paid orders without a recorded payment date use their last update date.
+The admin dashboard opens with shortcuts to **Pending orders** and **Needs restocking**. The restocking preview shows up to five active products, and its shortcut opens the full filtered list. Use **Admin menu** to navigate on smaller screens. The seven-day chart groups collected sales by payment date in Sri Lanka time. Older paid orders without a recorded payment date use their last update date.
 
 Use **Admin → Sales report** to see orders placed, paid orders, collections, refunds, net collections, and best-selling products for an inclusive Sri Lanka date range. Collections count on the payment date, refunds count on the refund date, and products are ranked by units in paid orders.
 

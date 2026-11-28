@@ -14,7 +14,7 @@ function orderNumber(id) {
 
 export function AdminOrdersTable({ orders, selection }) {
   return (
-    <div className="admin-table">
+    <div className="admin-table" role="region" aria-label="Orders table" tabIndex={0}>
       <table>
         <thead><tr>
           {selection && <th scope="col">Select</th>}
@@ -77,7 +77,7 @@ function BulkConfirmation({ orders, onComplete }) {
   return (
     <>
       {pending.length > 0 && (
-        <div className="admin-actions mb-4">
+        <div className="admin-actions admin-bulk-actions">
           <button type="button" className="button button-outline" disabled={!selection.length || saving} onClick={confirm}>
             {saving ? 'Confirming…' : `Confirm selected (${selection.length})`}
           </button>
@@ -128,7 +128,7 @@ export function AdminOrders() {
         <h1>Orders</h1>
         {data && <a className="button button-outline" href={`/api/admin/orders/export?${exportParams}`} download>Download CSV</a>}
       </div>
-      <form className="admin-search" key={JSON.stringify([search, status, from, to])} onSubmit={applyFilters}>
+      <form className="admin-search admin-list-filters" aria-label="Order filters" key={JSON.stringify([search, status, from, to])} onSubmit={applyFilters}>
         <label>
           Search orders
           <input name="q" type="search" defaultValue={search} maxLength={100} placeholder="Order number, name, or phone" />
@@ -407,15 +407,6 @@ export function AdminOrderDetails() {
           <h2>Delivery address</h2>
           <DeliveryAddress address={address} />
           <DeliveryInstructions instructions={order.deliveryInstructions} />
-          <h2>Purchased items</h2>
-          <ul className="order-lines">
-            {order.orderItems.map((item, index) => (
-              <li key={`${item.product}-${index}`}>
-                <span>{item.name} × {item.quantity}</span>
-                <span>{formatPrice(item.price * item.quantity)}</span>
-              </li>
-            ))}
-          </ul>
         </div>
         <OrderSummary amounts={order}>
           <p>Cash on Delivery · {orderPaymentLabel(order)}</p>
@@ -428,6 +419,17 @@ export function AdminOrderDetails() {
         </OrderSummary>
       </div>
       <div className="mt-5 grid gap-4">
+        <section className="checkout-panel">
+          <h2>Purchased items</h2>
+          <ul className="order-lines">
+            {order.orderItems.map((item, index) => (
+              <li key={`${item.product}-${index}`}>
+                <span>{item.name} × {item.quantity}</span>
+                <span>{formatPrice(item.price * item.quantity)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
         <StatusHistory order={order} />
         {order.orderStatus === 'returned' && order.paymentStatus === 'paid' && (
           <Refunds key={id} order={order} onSaved={() => {

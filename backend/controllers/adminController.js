@@ -1,5 +1,5 @@
 import Order, { DiscountCode, getDeliveryEstimate, readDiscountCode, saveDeliveryEstimate } from '../models/Order.js'
-import Product, { activeProducts } from '../models/Product.js'
+import Product, { activeProducts, restockStockLimit } from '../models/Product.js'
 import User from '../models/User.js'
 import { dayMs, escapeSearch, readPage, readRupees, readSriLankaDate } from '../utils/query.js'
 
@@ -65,11 +65,12 @@ export async function disableDiscount(request, response) {
 export async function adminOverview(request, response) {
   const today = Math.floor((Date.now() + colomboOffsetMs) / dayMs) * dayMs
   const firstDay = today - 6 * dayMs
-  const lowStock = { ...activeProducts, stock: { $lte: 5 } }
-  const [productCount, customerCount, orderCount, collected, recentOrders, lowStockCount, lowStockProducts] = await Promise.all([
+  const lowStock = { ...activeProducts, stock: { $lte: restockStockLimit } }
+  const [productCount, customerCount, orderCount, pendingOrderCount, collected, recentOrders, lowStockCount, lowStockProducts] = await Promise.all([
     Product.countDocuments(activeProducts),
     User.countDocuments({ role: 'customer' }),
     Order.countDocuments(),
+    Order.countDocuments({ orderStatus: 'pending' }),
     Order.aggregate([
       { $match: collectedOrders },
       { $facet: {
@@ -100,7 +101,7 @@ export async function adminOverview(request, response) {
     return { date, revenue: dailyTotals.get(date) ?? 0 }
   })
   response.json({
-    productCount, customerCount, orderCount, revenue: collected[0]?.total[0]?.revenue ?? 0,
+    productCount, customerCount, orderCount, pendingOrderCount, revenue: collected[0]?.total[0]?.revenue ?? 0,
     recentOrders, lowStockCount, lowStockProducts, sales,
   })
 }
