@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { api, clearRecentProducts, clearShoppingStorage } from './api.js'
 import { PageMessage } from './components/Feedback.jsx'
 
@@ -11,17 +11,47 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [sessionError, setSessionError] = useState(false)
   const [attempt, setAttempt] = useState(0)
+  const activeSession = useRef(null)
+
+  function replaceUser(nextUser) {
+    activeSession.current = nextUser ? Symbol() : null
+    setUser(nextUser)
+  }
 
   useEffect(() => {
     const controller = new AbortController()
+    let checkingSession = null
+
+    const requestInterceptor = api.interceptors.request.use((config) => {
+      config.buyoraSession = activeSession.current
+      return config
+    })
+
+    const responseInterceptor = api.interceptors.response.use(undefined, (error) => {
+      const session = error.config?.buyoraSession
+      const path = error.config?.url
+      if (error.response?.status === 401 && session && session === activeSession.current
+        && session !== checkingSession && path !== '/auth/login' && path !== '/auth/me') {
+        checkingSession = session
+        // An old request can fail after another tab or a password change has refreshed the cookie.
+        api.get('/auth/me', { signal: controller.signal })
+          .catch((checkError) => {
+            if (!controller.signal.aborted && session === activeSession.current && checkError.response?.status === 401) {
+              replaceUser(null)
+            }
+          })
+          .finally(() => { if (checkingSession === session) checkingSession = null })
+      }
+      return Promise.reject(error)
+    })
 
     async function restoreSession() {
       try {
         const { data } = await api.get('/auth/me', { signal: controller.signal })
-        if (!controller.signal.aborted) setUser(data.user)
+        if (!controller.signal.aborted) replaceUser(data.user)
       } catch (error) {
         if (controller.signal.aborted) return
-        if (error.response?.status === 401) setUser(null)
+        if (error.response?.status === 401) replaceUser(null)
         else setSessionError(true)
       } finally {
         if (!controller.signal.aborted) setLoading(false)
@@ -37,7 +67,7 @@ export function AuthProvider({ children }) {
       if (event.key !== signOutKey || !event.newValue) return
       controller.abort()
       clearShoppingStorage()
-      setUser(null)
+      replaceUser(null)
       setSessionError(false)
       setLoading(false)
     }
@@ -46,6 +76,8 @@ export function AuthProvider({ children }) {
     restoreSession()
     return () => {
       controller.abort()
+      api.interceptors.request.eject(requestInterceptor)
+      api.interceptors.response.eject(responseInterceptor)
       window.removeEventListener('storage', handleSessionChange)
     }
   }, [attempt])
@@ -59,7 +91,7 @@ export function AuthProvider({ children }) {
   async function signIn(credentials) {
     const { data } = await api.post('/auth/login', credentials)
     clearRecentProducts()
-    setUser(data.user)
+    replaceUser(data.user)
     try {
       localStorage.setItem(signInKey, String(Date.now()))
     } catch {
@@ -79,7 +111,7 @@ export function AuthProvider({ children }) {
     } catch {
       // Sign-out still works when storage is unavailable.
     }
-    setUser(null)
+    replaceUser(null)
   }
 
   function updateAccount(userId, changes) {

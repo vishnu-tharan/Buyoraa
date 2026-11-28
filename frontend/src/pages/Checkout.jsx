@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api, errorMessage, useApi } from '../api.js'
 import { useAuth } from '../AuthContext.jsx'
-import { useCart } from '../CartContext.jsx'
+import { isCheckoutKey, useCart } from '../CartContext.jsx'
 import AddressFields, { collectAddress } from '../components/AddressFields.jsx'
 import { Loading, PageMessage } from '../components/Feedback.jsx'
 import OrderSummary, { DeliveryEstimate } from '../components/OrderSummary.jsx'
@@ -12,19 +12,18 @@ import { formatPrice } from '../components/ProductGrid.jsx'
 function savedCheckout(userId) {
   try {
     const key = sessionStorage.getItem(`buyora-checkout-${userId}`)
-    return /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(key ?? '') ? key : ''
+    return isCheckoutKey(key) ? key : ''
   } catch {
     return ''
   }
 }
 
-function rememberCheckout(userId, key) {
+function clearSavedCheckout(userId, key) {
   try {
     const storageKey = `buyora-checkout-${userId}`
-    if (key) sessionStorage.setItem(storageKey, key)
-    else sessionStorage.removeItem(storageKey)
+    if (sessionStorage.getItem(storageKey) === key) sessionStorage.removeItem(storageKey)
   } catch {
-    // The checkout key also stays in memory while this page is open.
+    // Older builds stored checkout keys in this tab.
   }
 }
 
@@ -62,8 +61,8 @@ function DiscountEntry({ code, onChange, busy }) {
   )
 }
 
-function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
-  const { items } = useCart()
+function CheckoutForm({ user, legacyKey, onReceipt, onRecover }) {
+  const { items, prepareCheckout } = useCart()
   const [discountCode, setDiscountCode] = useState('')
   const { data, previousData, loading, error, retry } = useApi('/cart/quote', JSON.stringify({ items, discountCode, includeDeliveryEstimate: true }))
   const quote = data ?? previousData
@@ -71,7 +70,6 @@ function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
   const defaultAddress = savedAddresses.find(({ _id }) => _id === user.defaultAddressId) ?? savedAddresses[0]
   const [addressId, setAddressId] = useState(defaultAddress?._id ?? '')
   const address = savedAddresses.find(({ _id }) => _id === addressId) ?? { country: 'Sri Lanka' }
-  const attempt = useRef(existingKey)
   const inFlight = useRef(false)
   const [submitting, setSubmitting] = useState(false)
   const [notice, setNotice] = useState('')
@@ -87,25 +85,30 @@ function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
       phone: form.get('phone').trim(),
     }
 
-    if (!attempt.current) attempt.current = crypto.randomUUID()
-    rememberCheckout(user.id, attempt.current)
     inFlight.current = true
     setSubmitting(true)
     setNotice('')
 
+    let checkoutKey
     try {
+      checkoutKey = await prepareCheckout(items, legacyKey)
+      if (!checkoutKey) {
+        setNotice('Your cart changed. Review it before placing an order.')
+        retry()
+        return
+      }
       const { data: placed } = await api.post('/orders', {
         items,
         shippingAddress,
         deliveryInstructions: form.get('deliveryInstructions').trim(),
-        checkoutKey: attempt.current,
+        checkoutKey,
         discountCode,
         expectedTotal: data.totalAmount,
       })
-      await onReceipt(placed.receipt)
+      await onReceipt(placed.receipt, checkoutKey)
     } catch (requestError) {
       if (requestError.response?.data?.orderId) {
-        onRecover(attempt.current)
+        onRecover(checkoutKey)
         return
       }
 
@@ -117,9 +120,7 @@ function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
     }
   }
 
-  if (!items.length) return <PageMessage linkTo="/products" linkLabel="Browse products">Your cart is empty.</PageMessage>
-  if (loading && !quote) return <Loading label="Checking your cart…" />
-  if (error) return <PageMessage error onRetry={retry}>We couldn’t check your cart.</PageMessage>
+  if (!items.length && !submitting) return <PageMessage linkTo="/products" linkLabel="Browse products">Your cart is empty.</PageMessage>
 
   return (
     <div className="cart-layout">
@@ -156,38 +157,41 @@ function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
           <div>
             <h2>Cash on Delivery</h2>
             <p className="text-sm text-stone-600">Pay when your order arrives.</p>
-            <DeliveryEstimate estimate={quote.deliveryEstimate} />
+            <DeliveryEstimate estimate={quote?.deliveryEstimate} />
           </div>
         </div>
         {notice && <p className="form-error" role="alert">{notice}</p>}
-        {!loading && !quote.canCheckout && !quote.discountError && <p className="text-brand-dark-red">Update the unavailable items in your cart before placing the order.</p>}
+        {data && !data.canCheckout && !data.discountError && <p className="text-brand-dark-red">Update the unavailable items in your cart before placing the order.</p>}
         <div className="flex flex-wrap gap-3">
-          <button type="submit" className="button button-red" disabled={submitting || loading || !quote.canCheckout}>
+          <button type="submit" className="button button-red" disabled={submitting || !data?.canCheckout}>
             {submitting ? 'Placing order…' : 'Place order'}
           </button>
           <Link className="button button-outline" to="/cart">Back to cart</Link>
         </div>
       </form>
-      <OrderSummary amounts={quote} loading={loading}>
+      <OrderSummary amounts={data} loading={loading}>
         <DiscountEntry code={discountCode} onChange={(code) => {
           setNotice('')
           setDiscountCode(code)
         }} busy={submitting} />
-        {!loading && quote.discountError && <p className="form-error" role="alert">{quote.discountError}</p>}
-        <ul className="order-lines">
-          {quote.lines.map(({ productId, product, quantity, available, lineTotal }) => (
-            <li key={productId}>
-              <span>{product?.name ?? 'Unavailable product'} × {quantity}</span>
-              <span>{available ? formatPrice(lineTotal) : 'Unavailable'}</span>
-            </li>
-          ))}
-        </ul>
+        {error && <PageMessage error onRetry={retry}>We couldn’t check your cart.</PageMessage>}
+        {data?.discountError && <p className="form-error" role="alert">{data.discountError}</p>}
+        {quote && (
+          <ul className="order-lines">
+            {quote.lines.map(({ productId, product, quantity, available, lineTotal }) => (
+              <li key={productId}>
+                <span>{product?.name ?? 'Unavailable product'} × {quantity}</span>
+                <span>{available ? formatPrice(lineTotal) : 'Unavailable'}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </OrderSummary>
     </div>
   )
 }
 
-function ResumeCheckout({ checkoutKey, user, onReceipt, onRecover }) {
+function ResumeCheckout({ checkoutKey, user, legacyKey, onReceipt, onRecover }) {
   const { data, loading, error, retry } = useApi(`/orders/checkout/${checkoutKey}`)
 
   if (loading) return <Loading label="Checking your previous checkout…" />
@@ -196,37 +200,38 @@ function ResumeCheckout({ checkoutKey, user, onReceipt, onRecover }) {
     return (
       <div className="page-message">
         <p>Your previous checkout placed an order.</p>
-        <button className="button button-red mt-4" type="button" onClick={() => onReceipt(data.receipt)}>
+        <button className="button button-red mt-4" type="button" onClick={() => onReceipt(data.receipt, checkoutKey)}>
           View order confirmation
         </button>
       </div>
     )
   }
 
-  return <CheckoutForm user={user} existingKey={checkoutKey} onReceipt={onReceipt} onRecover={onRecover} />
+  return <CheckoutForm user={user} legacyKey={legacyKey} onReceipt={onReceipt} onRecover={onRecover} />
 }
 
 export default function Checkout() {
   const { user } = useAuth()
-  const { removeOrderedItems } = useCart()
+  const { checkoutKey, finishCheckout } = useCart()
   const navigate = useNavigate()
-  const [checkoutKey, setCheckoutKey] = useState(() => savedCheckout(user.id))
+  const [legacyKey] = useState(() => savedCheckout(user.id))
+  const [recoverKey, setRecoverKey] = useState(() => checkoutKey || legacyKey)
 
   const completing = useRef(false)
-  async function complete(receipt) {
+  async function complete(receipt, key) {
     if (completing.current) return
     completing.current = true
-    await removeOrderedItems(receipt.items)
-    rememberCheckout(user.id, '')
+    await finishCheckout(key, receipt.items, legacyKey)
+    if (legacyKey) clearSavedCheckout(user.id, legacyKey)
     navigate(`/orders/${receipt.orderId}/success`, { replace: true })
   }
 
   return (
     <section>
       <div className="page-heading"><h1>Checkout</h1></div>
-      {checkoutKey
-        ? <ResumeCheckout checkoutKey={checkoutKey} user={user} onReceipt={complete} onRecover={setCheckoutKey} />
-        : <CheckoutForm user={user} onReceipt={complete} onRecover={setCheckoutKey} />}
+      {recoverKey
+        ? <ResumeCheckout checkoutKey={recoverKey} user={user} legacyKey={legacyKey} onReceipt={complete} onRecover={setRecoverKey} />
+        : <CheckoutForm user={user} legacyKey={legacyKey} onReceipt={complete} onRecover={setRecoverKey} />}
     </section>
   )
 }

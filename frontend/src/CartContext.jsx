@@ -5,6 +5,11 @@ import { Loading } from './components/Feedback.jsx'
 
 const CartContext = createContext(null)
 const guestCartKey = `${cartStoragePrefix}guest`
+const checkoutKeyPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/
+
+export function isCheckoutKey(value) {
+  return typeof value === 'string' && checkoutKeyPattern.test(value)
+}
 
 async function withCartLock(action) {
   // All tabs finish one cart change before another reads the saved quantities.
@@ -24,7 +29,8 @@ function saveCart(storageKey, cart) {
       if (JSON.stringify(readCart(guestCartKey).items) === cart.mergedGuest) localStorage.removeItem(guestCartKey)
       delete cart.mergedGuest
     }
-    localStorage.setItem(storageKey, JSON.stringify(cart.pending.length ? cart : cart.items))
+    const hasDetails = cart.pending.length || cart.checkoutKey || cart.completedCheckout
+    localStorage.setItem(storageKey, JSON.stringify(hasDetails ? cart : cart.items))
     return true
   } catch {
     return false
@@ -47,6 +53,8 @@ function readCart(storageKey) {
     const saved = JSON.parse(localStorage.getItem(storageKey))
     const cart = { items: validItems(Array.isArray(saved) ? saved : saved?.items), pending: validItems(saved?.pending, true) }
     if (typeof saved?.mergedGuest === 'string') cart.mergedGuest = saved.mergedGuest
+    if (isCheckoutKey(saved?.checkoutKey)) cart.checkoutKey = saved.checkoutKey
+    if (isCheckoutKey(saved?.completedCheckout)) cart.completedCheckout = saved.completedCheckout
     return cart
   } catch {
     return { items: [], pending: [] }
@@ -184,11 +192,24 @@ function AccountCart({ storageKey, guestCart, children }) {
     return updateCart((next) => { next.items = next.items.filter((item) => item.productId !== productId) })
   }
 
-  function removeOrderedItems(orderedItems) {
+  function prepareCheckout(items, legacyKey) {
+    return updateCart((next) => {
+      if (next.completedCheckout !== cart.completedCheckout || JSON.stringify(next.items) !== JSON.stringify(items)) return null
+      // Tabs share one pending order until its receipt has been applied to the cart.
+      next.checkoutKey ??= (legacyKey && legacyKey !== next.completedCheckout) ? legacyKey : crypto.randomUUID()
+      return next.checkoutKey
+    })
+  }
+
+  function finishCheckout(key, orderedItems, legacyKey) {
     const ordered = new Map(orderedItems.map(({ productId, quantity }) => [productId, quantity]))
     return updateCart((next) => {
+      const legacyReceipt = key === legacyKey && !next.checkoutKey && !next.completedCheckout
+      if (next.checkoutKey !== key && !legacyReceipt) return
       next.items = next.items.map((item) => ({ ...item, quantity: item.quantity - (ordered.get(item.productId) ?? 0) }))
         .filter(({ quantity }) => quantity > 0)
+      delete next.checkoutKey
+      next.completedCheckout = key
     })
   }
 
@@ -253,7 +274,10 @@ function AccountCart({ storageKey, guestCart, children }) {
   const count = itemCount(items)
 
   return (
-    <CartContext.Provider value={{ items, pending, count, addItem, changeQuantity, removeItem, removeOrderedItems, buyAgain, retryPending, dismissPending }}>
+    <CartContext.Provider value={{
+      items, pending, count, addItem, changeQuantity, removeItem, buyAgain, retryPending, dismissPending,
+      checkoutKey: cart.checkoutKey, prepareCheckout, finishCheckout,
+    }}>
       {children}
     </CartContext.Provider>
   )

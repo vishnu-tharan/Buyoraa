@@ -31,7 +31,7 @@ export default function OrderSummary({ amounts, loading = false, estimated = fal
   return (
     <aside className="cart-summary">
       <h2>Order summary</h2>
-      {loading ? <p role="status">Checking prices and stock…</p> : (
+      {loading ? <p role="status">Checking prices and stock…</p> : amounts && (
         <dl>
           <div><dt>Subtotal</dt><dd>{formatPrice(amounts.subtotal)}</dd></div>
           <div><dt>Delivery</dt><dd>{formatPrice(amounts.shippingFee)}</dd></div>
