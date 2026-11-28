@@ -66,7 +66,7 @@ function CheckoutForm({ user, existingKey, onReceipt, onRecover }) {
         checkoutKey: attempt.current,
         expectedTotal: data.totalAmount,
       })
-      onReceipt(placed.receipt)
+      await onReceipt(placed.receipt)
     } catch (requestError) {
       if (requestError.response?.data?.orderId) {
         onRecover(attempt.current)
@@ -170,8 +170,11 @@ export default function Checkout() {
   const navigate = useNavigate()
   const [checkoutKey, setCheckoutKey] = useState(() => savedCheckout(user.id))
 
-  function complete(receipt) {
-    removeOrderedItems(receipt.items)
+  const completing = useRef(false)
+  async function complete(receipt) {
+    if (completing.current) return
+    completing.current = true
+    await removeOrderedItems(receipt.items)
     rememberCheckout(user.id, '')
     navigate(`/orders/${receipt.orderId}/success`, { replace: true })
   }

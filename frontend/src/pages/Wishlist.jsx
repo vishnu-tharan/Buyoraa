@@ -17,16 +17,15 @@ export default function Wishlist() {
   async function removeProduct(product, moveToCart = false) {
     setNotice(null)
 
-    if (moveToCart) {
-      const message = addItem(product, { onlyIfMissing: true })
-      if (message) {
-        setNotice({ error: true, message })
-        return
-      }
-    }
-
     setPending(true)
     try {
+      if (moveToCart) {
+        const message = await addItem(product, { onlyIfMissing: true })
+        if (message) {
+          setNotice({ error: true, message })
+          return
+        }
+      }
       await changeSaved(product._id, false)
       setNotice({ message: moveToCart ? 'Moved to your cart.' : 'Removed from your wishlist.' })
     } catch {

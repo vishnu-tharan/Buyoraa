@@ -1,14 +1,15 @@
 import { Minus, Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { errorMessage, useApi } from '../api.js'
-import { useAuth } from '../AuthContext.jsx'
+import { SessionError, useAuth } from '../AuthContext.jsx'
 import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage } from '../components/Feedback.jsx'
 import OrderSummary from '../components/OrderSummary.jsx'
 import { formatPrice, ProductImage } from '../components/ProductGrid.jsx'
 
 function CartItem({ line }) {
-  const { setQuantity, removeItem } = useCart()
+  const { changeQuantity, removeItem } = useCart()
   const { productId, product, quantity, available, lineTotal } = line
 
   return (
@@ -29,13 +30,13 @@ function CartItem({ line }) {
           </p>
         )}
         {!available && product?.stock > 0 && (
-          <button type="button" className="text-link mt-1" onClick={() => setQuantity(productId, product.stock)}>
+          <button type="button" className="text-link mt-1" onClick={() => changeQuantity(productId, 0, product.stock)}>
             Use available quantity
           </button>
         )}
         {product?.stock > 0 && (
           <div className="quantity-controls" role="group" aria-label={`Quantity for ${product.name}`}>
-            <button type="button" aria-label={`Decrease ${product.name} quantity`} disabled={quantity <= 1} onClick={() => setQuantity(productId, quantity - 1)}>
+            <button type="button" aria-label={`Decrease ${product.name} quantity`} disabled={quantity <= 1} onClick={() => changeQuantity(productId, -1, product.stock)}>
               <Minus size={16} aria-hidden="true" />
             </button>
             <span>{quantity}</span>
@@ -43,7 +44,7 @@ function CartItem({ line }) {
               type="button"
               aria-label={`Increase ${product.name} quantity`}
               disabled={quantity >= Math.min(product.stock, 99)}
-              onClick={() => setQuantity(productId, quantity + 1)}
+              onClick={() => changeQuantity(productId, 1, product.stock)}
             >
               <Plus size={16} aria-hidden="true" />
             </button>
@@ -114,8 +115,36 @@ function CartContents({ items }) {
   )
 }
 
+function WaitingItems({ items }) {
+  const { dismissPending } = useCart()
+  // Only product names are needed here. Each quote accepts up to 50 product IDs.
+  const lookup = items.map(({ productId }) => ({ productId, quantity: 1 }))
+  const { data, error, retry } = useApi('/cart/quote', JSON.stringify({ items: lookup }))
+  return (
+    <>
+      {error && <PageMessage error onRetry={retry}>We couldn’t load the product names.</PageMessage>}
+      <ul className="order-lines">
+        {items.map(({ productId, quantity }, index) => (
+          <li key={productId}>
+            <span><Link className="text-link" to={`/products/${productId}`}>{data?.lines[index]?.product?.name ?? (data ? 'Unavailable product' : 'View product')}</Link> × {quantity}</span>
+            <button type="button" className="text-link" onClick={() => dismissPending(productId)}>Dismiss</button>
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+}
+
 export default function Cart() {
-  const { items, count } = useCart()
+  const { items, count, pending, retryPending } = useCart()
+  const { loading, sessionError } = useAuth()
+  const [mergeMessage, setMergeMessage] = useState('')
+  async function addWaitingItems() {
+    const added = await retryPending()
+    setMergeMessage(added ? `Added ${added} ${added === 1 ? 'unit' : 'units'} to your cart.` : 'Your cart is still at its limit. Remove a product or reduce its quantity first.')
+  }
+  if (loading) return <Loading label="Checking your cart…" />
+  if (sessionError) return <SessionError />
 
   return (
     <section>
@@ -123,6 +152,17 @@ export default function Cart() {
         <h1>Shopping cart</h1>
         {count > 0 && <p>{count} {count === 1 ? 'item' : 'items'}</p>}
       </div>
+      {pending.length > 0 && (
+        <section className="checkout-panel mb-4">
+          <h2>Items waiting to be added</h2>
+          <p>Your cart holds up to 50 different products and 99 of each. Make room and try again, or dismiss an item.</p>
+          {Array.from({ length: Math.ceil(pending.length / 50) }, (_, i) => (
+            <WaitingItems key={i} items={pending.slice(i * 50, (i + 1) * 50)} />
+          ))}
+          <button type="button" className="button button-outline" onClick={addWaitingItems}>Add waiting items</button>
+        </section>
+      )}
+      {mergeMessage && <p className="mb-4" role="status">{mergeMessage}</p>}
       {items.length ? <CartContents items={items} /> : (
         <PageMessage linkTo="/products" linkLabel="Browse products">Your cart is empty.</PageMessage>
       )}

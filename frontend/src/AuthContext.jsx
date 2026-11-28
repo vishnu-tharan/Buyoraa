@@ -1,12 +1,16 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { api, clearRecentProducts, clearShoppingStorage } from './api.js'
+import { PageMessage } from './components/Feedback.jsx'
 
 const AuthContext = createContext(null)
 const signOutKey = 'buyora-sign-out'
+const signInKey = 'buyora-sign-in'
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [sessionError, setSessionError] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -15,33 +19,52 @@ export function AuthProvider({ children }) {
       try {
         const { data } = await api.get('/auth/me', { signal: controller.signal })
         if (!controller.signal.aborted) setUser(data.user)
-      } catch {
-        if (!controller.signal.aborted) setUser(null)
+      } catch (error) {
+        if (controller.signal.aborted) return
+        if (error.response?.status === 401) setUser(null)
+        else setSessionError(true)
       } finally {
         if (!controller.signal.aborted) setLoading(false)
       }
     }
 
-    function handleSignOut(event) {
+    function handleSessionChange(event) {
+      if (event.key === signInKey && event.newValue) {
+        controller.abort()
+        retrySession()
+        return
+      }
       if (event.key !== signOutKey || !event.newValue) return
       controller.abort()
       clearShoppingStorage()
       setUser(null)
+      setSessionError(false)
       setLoading(false)
     }
 
-    window.addEventListener('storage', handleSignOut)
+    window.addEventListener('storage', handleSessionChange)
     restoreSession()
     return () => {
       controller.abort()
-      window.removeEventListener('storage', handleSignOut)
+      window.removeEventListener('storage', handleSessionChange)
     }
-  }, [])
+  }, [attempt])
+
+  function retrySession() {
+    setLoading(true)
+    setSessionError(false)
+    setAttempt((current) => current + 1)
+  }
 
   async function signIn(credentials) {
     const { data } = await api.post('/auth/login', credentials)
     clearRecentProducts()
     setUser(data.user)
+    try {
+      localStorage.setItem(signInKey, String(Date.now()))
+    } catch {
+      // This tab can still sign in when storage is unavailable.
+    }
   }
 
   async function register(details) {
@@ -64,7 +87,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, register, signOut, updateAccount }}>
+    <AuthContext.Provider value={{ user, loading, sessionError, retrySession, signIn, register, signOut, updateAccount }}>
       {children}
     </AuthContext.Provider>
   )
@@ -72,4 +95,9 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   return useContext(AuthContext)
+}
+
+export function SessionError() {
+  const { retrySession } = useAuth()
+  return <PageMessage error onRetry={retrySession}>We couldn’t check your account. Check your connection and try again.</PageMessage>
 }

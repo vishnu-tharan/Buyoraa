@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router'
-import { useAuth } from './AuthContext.jsx'
+import { SessionError, useAuth } from './AuthContext.jsx'
 import { Loading, PageMessage } from './components/Feedback.jsx'
 import StoreLayout from './components/StoreLayout.jsx'
 import { Account, AuthForm } from './pages/Account.jsx'
@@ -15,10 +15,11 @@ import { OrderDetails, OrderSuccess, Orders } from './pages/Orders.jsx'
 import Wishlist from './pages/Wishlist.jsx'
 
 function ProtectedRoute({ adminOnly = false }) {
-  const { user, loading } = useAuth()
+  const { user, loading, sessionError } = useAuth()
   const location = useLocation()
 
   if (loading) return <Loading label="Checking your account…" />
+  if (sessionError) return <SessionError />
   if (!user) {
     return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />
   }

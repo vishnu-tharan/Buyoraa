@@ -111,7 +111,7 @@ function DeliveryInstructions({ instructions }) {
 
 function PackingSlip({ order }) {
   return (
-    <article className="packing-slip">
+    <article className="print-document packing-slip">
       <h1>Buyora packing slip</h1>
       <p>Order {orderNumber(order._id)} · {dateFormat.format(new Date(order.createdAt))}</p>
       <h2>Deliver to</h2>

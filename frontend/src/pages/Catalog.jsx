@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Heart, PackageCheck, PackageX, Search, Shopp
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router'
 import { api, errorMessage, rememberProduct, useApi } from '../api.js'
-import { useAuth } from '../AuthContext.jsx'
+import { SessionError, useAuth } from '../AuthContext.jsx'
 import { useCart } from '../CartContext.jsx'
 import { Loading, PageMessage, Toast } from '../components/Feedback.jsx'
 import ProductGrid, { formatPrice, ProductGridSkeleton, ProductImage, ProductRating, WishlistToggle } from '../components/ProductGrid.jsx'
@@ -234,15 +234,16 @@ function ProductInformation({ product, relatedProducts, catalogReturn }) {
 }
 
 function ProductActions({ product, catalogReturn }) {
-  const { user, loading } = useAuth()
+  const { user, loading, sessionError } = useAuth()
   const { addItem } = useCart()
   const [notice, setNotice] = useState(null)
 
-  function addToCart() {
-    const message = addItem(product)
+  async function addToCart() {
+    const message = await addItem(product)
     setNotice(message ? { message, error: true } : { message: 'Added to your cart.' })
   }
 
+  if (sessionError) return <SessionError />
   return (
     <div className="mt-5">
       <div className="flex flex-wrap gap-3">

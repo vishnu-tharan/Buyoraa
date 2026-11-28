@@ -117,7 +117,7 @@ Add categories before products. Enter product prices in rupees and add one image
 
 In **Admin → Products**, choose **Archive** to hide a product from the store. Open **Archived**, select **Restore**, and confirm with **Restore product**. The original category is selected if it still exists. If it was deleted, choose a replacement category. Restoring keeps the product’s stock, past orders, and stock history.
 
-Orders move from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. Cancelling a pending or confirmed order restores stock. Marking an order delivered records its Cash on Delivery payment as paid.
+Orders move from **Pending** to **Confirmed**, **Shipped**, and **Delivered**. Cancelling a pending or confirmed order restores stock. Marking an order delivered records its Cash on Delivery payment as paid. Customers can then open the order in **My orders** and choose **Print receipt** to print it or save a PDF.
 
 If a shipped order is refused or cannot be delivered, mark it **Delivery failed**. Stock stays reserved until the items return. Once all items are received back from a failed delivery or a delivered order, mark it **Returned** and choose whether to restock them. Restock only if every item can be sold again. Recording a return leaves the payment record and collected sales total intact. Handle any refund separately.
 
@@ -134,7 +134,7 @@ The admin overview shows up to five active products that have five units or fewe
 | Catalog | Search by name, combine category and price filters, sort prices, and open a product. Test a search that returns no results. |
 | Reviews | Open a delivered product as its buyer. Save, edit, and remove a review, and verify the product card rating updates. Accounts without a delivered purchase cannot review the product. |
 | Account | Register and then sign in. Add, edit, or remove a delivery address. In **My account → Change password**, verify that the current device stays signed in and other sessions end. |
-| Cart and wishlist | Add items and change quantities as a guest, then sign in and check that the guest cart merges into the account cart. Sign out and verify that the local cart and recently viewed list are cleared. Save a product to the wishlist, reload its product page, and remove it there. |
+| Cart and wishlist | Add products in two tabs and check both carts update. Sign in with a guest cart. If the merge reaches 50 products or 99 units of one product, check the remaining quantities under **Items waiting to be added**. Sign out and verify that the local cart and recently viewed list are cleared. Save a product to the wishlist, reload its product page, and remove it there. |
 | Checkout | Set a default shipping address in **My account** and verify checkout selects it. Add optional delivery instructions, place a Cash on Delivery order, and check the order and its delivery progress in **My orders**. |
 | Admin products | Archive a product and verify it disappears from the storefront. Restore it from **Archived** and check that stock and history are preserved. Try restoring a product whose original category was deleted. |
 | Admin | Search and filter orders, print a packing slip, and check stock history after a cancellation or restocked return. Verify that marking delivery failed leaves stock reserved. Try the admin URL using a customer account. |

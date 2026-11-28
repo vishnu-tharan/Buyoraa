@@ -906,19 +906,24 @@ a.shopping-title:hover { color: var(--color-brand-red); text-decoration: underli
   .store-main .cart-summary { position: sticky; top: var(--store-header-offset); }
 }
 
-.packing-slip { display: none; }
+.print-document { display: none; }
 
 @media print {
+  .store-layout:has(.customer-receipt) { display: block; min-height: 0; }
+  .store-main:has(.customer-receipt) { width: 100%; margin: 0; padding: 0; }
+  .store-layout:has(.customer-receipt) > :not(main),
+  .store-main:has(.customer-receipt) > :not(:has(.customer-receipt)),
+  section:has(> .customer-receipt) > :not(.customer-receipt) { display: none; }
   .admin-layout:has(.packing-slip) { width: 100%; margin: 0; }
   .admin-workspace:has(.packing-slip) { display: block; }
   .admin-layout:has(.packing-slip) .admin-header,
   .admin-layout:has(.packing-slip) .admin-sidebar,
   .admin-order-details:has(.packing-slip) > :not(.packing-slip) { display: none; }
 
-  .packing-slip { display: block; color: black; background: white; overflow-wrap: anywhere; }
-  .packing-slip h1 { font-size: 1.5rem; font-weight: 750; }
-  .packing-slip h2 { margin-top: 1rem; font-weight: 700; break-after: avoid; }
-  .packing-slip table { width: 100%; border-collapse: collapse; }
-  .packing-slip th, .packing-slip td { padding: 0.35rem 0.5rem; border: 1px solid #666; text-align: left; }
-  .packing-slip tr { break-inside: avoid; }
+  .print-document { display: block; color: black; background: white; overflow-wrap: anywhere; }
+  .print-document h1 { font-size: 1.5rem; font-weight: 750; }
+  .print-document h2 { margin-top: 1rem; font-weight: 700; break-after: avoid; }
+  .print-document table { width: 100%; border-collapse: collapse; }
+  .print-document th, .print-document td { padding: 0.35rem 0.5rem; border: 1px solid #666; text-align: left; }
+  .print-document tr { break-inside: avoid; }
 }

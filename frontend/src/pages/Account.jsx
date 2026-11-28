@@ -2,12 +2,12 @@ import { LogOut, ShieldCheck, UserRound } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { api, errorMessage } from '../api.js'
-import { useAuth } from '../AuthContext.jsx'
+import { SessionError, useAuth } from '../AuthContext.jsx'
 import AddressFields, { collectAddress } from '../components/AddressFields.jsx'
 import { Loading } from '../components/Feedback.jsx'
 
 export function AuthForm({ registerMode = false }) {
-  const { user, loading, register, signIn } = useAuth()
+  const { user, loading, sessionError, register, signIn } = useAuth()
   const { state } = useLocation()
   const navigate = useNavigate()
   const [submitting, setSubmitting] = useState(false)
@@ -19,6 +19,7 @@ export function AuthForm({ registerMode = false }) {
   const title = registerMode ? 'Create your account' : 'Sign in'
 
   if (loading) return <Loading label="Checking your account…" />
+  if (sessionError) return <SessionError />
   if (user) return <Navigate to={destination} state={{ catalogReturn: state?.catalogReturn }} replace />
 
   async function submit(event) {

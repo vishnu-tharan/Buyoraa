@@ -213,6 +213,35 @@ function OrderCancellation({ orderId, onResult }) {
   )
 }
 
+function Receipt({ order, orderNumber }) {
+  return (
+    <article className="print-document customer-receipt">
+      <h1>Buyora receipt</h1>
+      <p>Order {orderNumber}</p>
+      <p>Ordered on {orderDate.format(new Date(order.createdAt))}</p>
+      <p>Recipient · {order.shippingAddress.name}</p>
+      <p>Paid by Cash on Delivery</p>
+      {order.paidAt && <p>Payment date · {orderDate.format(new Date(order.paidAt))}</p>}
+      <h2>Items</h2>
+      <table>
+        <thead><tr><th>Product</th><th>Qty</th><th>Unit price</th><th>Amount</th></tr></thead>
+        <tbody>
+          {order.orderItems.map((item, index) => (
+            <tr key={`${item.product}-${index}`}>
+              <td>{item.name}</td><td>{item.quantity}</td>
+              <td>{formatPrice(item.price)}</td><td>{formatPrice(item.price * item.quantity)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <h2>Payment summary</h2>
+      <p>Subtotal · {formatPrice(order.subtotal)}</p>
+      <p>Delivery · {formatPrice(order.shippingFee)}</p>
+      <p><strong>Amount paid · {formatPrice(order.totalAmount)}</strong></p>
+    </article>
+  )
+}
+
 function OrderPage({ confirmation = false }) {
   const { id } = useParams()
   const { data, loading, error, retry } = useApi(`/orders/${encodeURIComponent(id)}`)
@@ -234,6 +263,7 @@ function OrderPage({ confirmation = false }) {
   const cancelled = order.orderStatus === 'cancelled'
   const paymentLabel = orderPaymentLabel(order)
   const canCancel = order.orderStatus === 'pending' && order.paymentStatus === 'pending'
+  const canPrintReceipt = order.orderStatus === 'delivered' && order.paymentStatus === 'paid'
   const cancellationNotice = cancellation?.id === id ? cancellation : null
   const cancellationError = cancellationNotice?.error && !cancelled
 
@@ -265,11 +295,13 @@ function OrderPage({ confirmation = false }) {
 
   return (
     <section>
+      {canPrintReceipt && <Receipt order={order} orderNumber={orderNumber} />}
       <Link to="/orders" className="text-link mb-4">Back to my orders</Link>
       <div className="page-heading">
         <h1>Order {orderNumber}</h1>
         <p>{orderDate.format(new Date(order.createdAt))}</p>
         <CopyOrderNumber key={order._id} orderNumber={orderNumber} />
+        {canPrintReceipt && <button type="button" className="button button-outline mt-3" onClick={() => window.print()}>Print receipt</button>}
       </div>
       <div className="mb-5"><BuyAgain key={order._id} orderItems={order.orderItems} /></div>
       <div className="cart-layout">

@@ -33,7 +33,7 @@ export function StoreSearch() {
 }
 
 function Navbar() {
-  const { user, loading } = useAuth()
+  const { user, loading, sessionError } = useAuth()
   const { count } = useCart()
   const navClass = ({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'
 
@@ -55,9 +55,9 @@ function Navbar() {
             <ShoppingBag size={18} aria-hidden="true" />
             <span className="cart-count">{count}</span>
           </NavLink>
-          <Link to={user ? '/account' : '/login'} className="account-link">
+          <Link to={user || sessionError ? '/account' : '/login'} className="account-link">
             <UserRound size={17} aria-hidden="true" />
-            <span className="sr-only min-[360px]:not-sr-only">{loading || user ? 'Account' : 'Sign in'}</span>
+            <span className="sr-only min-[360px]:not-sr-only">{loading || user || sessionError ? 'Account' : 'Sign in'}</span>
           </Link>
         </div>
       </nav>
@@ -84,6 +84,7 @@ function Footer() {
 
 export default function StoreLayout() {
   const location = useLocation()
+  const { pending } = useCart()
 
   useEffect(() => {
     if (location.hash === '#categories') {
@@ -99,6 +100,11 @@ export default function StoreLayout() {
     <div className="store-layout">
       <Navbar />
       <main className="shell store-main">
+        {pending.length > 0 && location.pathname !== '/cart' && (
+          <p className="checkout-panel mb-4" role="status">
+            Some guest cart items exceeded your cart limits. <Link className="text-link" to="/cart">Review items</Link>
+          </p>
+        )}
         <Outlet />
       </main>
       <Footer />

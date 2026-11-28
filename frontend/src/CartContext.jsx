@@ -1,38 +1,77 @@
 import { createContext, useContext, useLayoutEffect, useRef, useState } from 'react'
 import { useAuth } from './AuthContext.jsx'
 import { api, cartStoragePrefix } from './api.js'
+import { Loading } from './components/Feedback.jsx'
 
 const CartContext = createContext(null)
 const guestCartKey = `${cartStoragePrefix}guest`
 
-function saveCart(storageKey, items, consumeGuest = false) {
+async function withCartLock(action) {
+  // All tabs finish one cart change before another reads the saved quantities.
   try {
-    localStorage.setItem(storageKey, JSON.stringify(items))
-    if (consumeGuest) localStorage.removeItem(guestCartKey)
+    if (navigator.locks) return await navigator.locks.request('buyora-cart', action)
+  } catch (error) {
+    if (error.name !== 'SecurityError') throw error
+  }
+  return action()
+}
+
+function saveCart(storageKey, cart) {
+  try {
+    // Record the transfer first so reopening the tab cannot add the same guest items twice.
+    if (cart.mergedGuest) {
+      localStorage.setItem(storageKey, JSON.stringify(cart))
+      if (JSON.stringify(readCart(guestCartKey).items) === cart.mergedGuest) localStorage.removeItem(guestCartKey)
+      delete cart.mergedGuest
+    }
+    localStorage.setItem(storageKey, JSON.stringify(cart.pending.length ? cart : cart.items))
     return true
   } catch {
     return false
   }
 }
 
+function validItems(list, pending = false) {
+  const products = new Map()
+  for (const item of Array.isArray(list) ? list : []) {
+    if (typeof item?.productId !== 'string' || !/^[a-f0-9]{24}$/i.test(item.productId)
+      || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || (!pending && item.quantity > 99)) continue
+    const productId = item.productId.toLowerCase()
+    products.set(productId, { productId, quantity: item.quantity })
+  }
+  return pending ? [...products.values()] : [...products.values()].slice(0, 50)
+}
+
 function readCart(storageKey) {
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey))
-    if (!Array.isArray(saved)) return []
-
-    const products = new Map()
-    for (const item of saved) {
-      if (typeof item?.productId === 'string' && /^[a-f0-9]{24}$/i.test(item.productId)
-        && Number.isInteger(item.quantity) && item.quantity >= 1 && item.quantity <= 99) {
-        const productId = item.productId.toLowerCase()
-        products.set(productId, { productId, quantity: item.quantity })
-      }
-    }
-
-    return [...products.values()].slice(0, 50)
+    const cart = { items: validItems(Array.isArray(saved) ? saved : saved?.items), pending: validItems(saved?.pending, true) }
+    if (typeof saved?.mergedGuest === 'string') cart.mergedGuest = saved.mergedGuest
+    return cart
   } catch {
-    return []
+    return { items: [], pending: [] }
   }
+}
+
+function mergeItems(cart, incoming) {
+  for (const { productId, quantity } of incoming) {
+    const current = cart.items.find((item) => item.productId === productId)
+    const fits = current || cart.items.length < 50
+    const room = fits ? 99 - (current?.quantity ?? 0) : 0
+    const added = Math.min(room, quantity)
+    if (current) current.quantity += added
+    else if (added) cart.items.push({ productId, quantity: added })
+
+    if (added < quantity) {
+      const waiting = cart.pending.find((item) => item.productId === productId)
+      if (waiting) waiting.quantity += quantity - added
+      else cart.pending.push({ productId, quantity: quantity - added })
+    }
+  }
+}
+
+function itemCount(items) {
+  return items.reduce((total, item) => total + item.quantity, 0)
 }
 
 export function CartProvider({ children }) {
@@ -45,78 +84,125 @@ export function CartProvider({ children }) {
 
 function AccountCart({ storageKey, guestCart, children }) {
   const isGuest = storageKey === guestCartKey
-  const [items, setItems] = useState(() => (isGuest ? guestCart.current : null) ?? readCart(storageKey))
-  const latestItems = useRef(items)
+  const [cart, setCart] = useState(() => (isGuest ? guestCart.current : null) ?? readCart(storageKey))
+  const [ready, setReady] = useState(isGuest)
+  const memory = useRef(isGuest ? guestCart.current : null)
   const active = useRef(false)
+
+  function currentCart() {
+    return memory.current ?? readCart(storageKey)
+  }
+
+  function storeCart(next) {
+    const saved = saveCart(storageKey, next)
+    memory.current = saved ? null : next
+    if (isGuest) guestCart.current = memory.current
+    setCart(next)
+    return saved
+  }
 
   useLayoutEffect(() => {
     active.current = true
-    if (!isGuest) {
-      const guestItems = guestCart.current ?? readCart(guestCartKey)
-      if (guestItems.length) {
-        const merged = new Map(readCart(storageKey).map((item) => [item.productId, item]))
-        for (const item of guestItems) {
-          const current = merged.get(item.productId)
-          if (current || merged.size < 50) {
-            merged.set(item.productId, { ...item, quantity: Math.min(99, (current?.quantity ?? 0) + item.quantity) })
-          }
-        }
-        const nextItems = [...merged.values()]
-        latestItems.current = nextItems
-        setItems(nextItems)
-        guestCart.current = null
-        saveCart(storageKey, nextItems, true)
-      }
+    let closed = false
+    function sync(event) {
+      if (event.type === 'storage' && event.key !== storageKey && event.key !== null) return
+      withCartLock(() => {
+        if (!closed) setCart(currentCart())
+      })
     }
-    return () => { active.current = false }
+    window.addEventListener('storage', sync)
+    window.addEventListener('focus', sync)
+    if (isGuest) {
+      setCart(currentCart())
+    } else {
+      withCartLock(() => {
+        if (closed) return
+        const savedGuest = readCart(guestCartKey)
+        const guest = guestCart.current ?? savedGuest
+        const next = structuredClone(currentCart())
+        if (guest.items.length) {
+          const signature = JSON.stringify(savedGuest.items)
+          if (guestCart.current || next.mergedGuest !== signature) mergeItems(next, guest.items)
+          next.mergedGuest = signature
+          storeCart(next)
+          guestCart.current = null
+        } else if (next.mergedGuest) {
+          storeCart(next)
+        } else {
+          setCart(next)
+        }
+        setReady(true)
+      })
+    }
+    return () => {
+      active.current = false
+      closed = true
+      window.removeEventListener('storage', sync)
+      window.removeEventListener('focus', sync)
+    }
   }, [guestCart, isGuest, storageKey])
 
-  function updateCart(nextItems) {
-    if (!active.current) return
-    latestItems.current = nextItems
-    const saved = saveCart(storageKey, nextItems)
-    if (isGuest) guestCart.current = saved ? null : nextItems
-    setItems(nextItems)
+  function updateCart(change) {
+    return withCartLock(() => {
+      if (!active.current) return
+      const next = structuredClone(currentCart())
+      const result = change(next)
+      storeCart(next)
+      return result
+    })
   }
 
   function addItem(product, { onlyIfMissing = false } = {}) {
     if (!active.current) return 'Cart is unavailable. Try again.'
 
-    const previous = latestItems.current
-    const current = previous.find(({ productId }) => productId === product._id)
-    if (current && onlyIfMissing) return ''
+    return updateCart(({ items }) => {
+      const current = items.find(({ productId }) => productId === product._id)
+      if (current && onlyIfMissing) return ''
 
-    const quantity = (current?.quantity ?? 0) + 1
-    if (quantity > product.stock) return 'The available stock is already in your cart.'
-    if (quantity > 99) return 'You can add up to 99 of the same product.'
-    if (!current && previous.length === 50) return 'Your cart can hold up to 50 different products.'
+      const quantity = (current?.quantity ?? 0) + 1
+      if (quantity > product.stock) return 'The available stock is already in your cart.'
+      if (quantity > 99) return 'You can add up to 99 of the same product.'
+      if (!current && items.length === 50) return 'Your cart can hold up to 50 different products.'
 
-    const nextItems = current
-      ? previous.map((item) => item.productId === product._id ? { ...item, quantity } : item)
-      : [...previous, { productId: product._id, quantity }]
-    updateCart(nextItems)
-    return ''
+      if (current) current.quantity = quantity
+      else items.push({ productId: product._id, quantity })
+      return ''
+    })
   }
 
-  function setQuantity(productId, quantity) {
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) return
-
-    updateCart(latestItems.current.map((item) => (
-      item.productId === productId ? { ...item, quantity } : item
-    )))
+  function changeQuantity(productId, delta, stock) {
+    return updateCart(({ items }) => {
+      const item = items.find((entry) => entry.productId === productId)
+      if (!item) return
+      if (delta === 0) item.quantity = Math.min(item.quantity, stock)
+      else if (delta < 0) item.quantity = Math.max(1, item.quantity - 1)
+      else if (item.quantity < Math.min(99, stock)) item.quantity += 1
+    })
   }
 
   function removeItem(productId) {
-    updateCart(latestItems.current.filter((item) => item.productId !== productId))
+    return updateCart((next) => { next.items = next.items.filter((item) => item.productId !== productId) })
   }
 
   function removeOrderedItems(orderedItems) {
     const ordered = new Map(orderedItems.map(({ productId, quantity }) => [productId, quantity]))
-    const remaining = latestItems.current
-      .map((item) => ({ ...item, quantity: item.quantity - (ordered.get(item.productId) ?? 0) }))
-      .filter(({ quantity }) => quantity > 0)
+    return updateCart((next) => {
+      next.items = next.items.map((item) => ({ ...item, quantity: item.quantity - (ordered.get(item.productId) ?? 0) }))
+        .filter(({ quantity }) => quantity > 0)
+    })
+  }
 
-    updateCart(remaining)
+  function retryPending() {
+    return updateCart((next) => {
+      const waiting = next.pending
+      next.pending = []
+      mergeItems(next, waiting)
+      return itemCount(waiting) - itemCount(next.pending)
+    })
+  }
+
+  function dismissPending(productId) {
+    return updateCart((next) => { next.pending = next.pending.filter((item) => item.productId !== productId) })
   }
 
   async function buyAgain(orderItems) {
@@ -126,11 +212,14 @@ function AccountCart({ storageKey, guestCart, children }) {
     const { data } = await api.post('/cart/quote', { items: requestedItems })
     if (!active.current) throw new Error('Sign in again before adding these items.')
 
-    const remaining = latestItems.current.map((item) => ({ ...item }))
+    return updateCart(({ items }) => addReorderItems(items, data.lines, orderItems))
+  }
+
+  function addReorderItems(remaining, lines, orderItems) {
     const adjustments = []
     let added = 0
 
-    for (const line of data.lines) {
+    for (const line of lines) {
       const { product, productId, quantity } = line
       const name = orderItems.find((item) => item.product === productId)?.name ?? 'Product'
       if (!product || product.stock === 0) {
@@ -156,14 +245,15 @@ function AccountCart({ storageKey, guestCart, children }) {
       }
     }
 
-    updateCart(remaining)
     return { added, adjustments }
   }
 
-  const count = items.reduce((total, item) => total + item.quantity, 0)
+  if (!ready) return <Loading label="Preparing your cart…" />
+  const { items, pending } = cart
+  const count = itemCount(items)
 
   return (
-    <CartContext.Provider value={{ items, count, addItem, setQuantity, removeItem, removeOrderedItems, buyAgain }}>
+    <CartContext.Provider value={{ items, pending, count, addItem, changeQuantity, removeItem, removeOrderedItems, buyAgain, retryPending, dismissPending }}>
       {children}
     </CartContext.Provider>
   )
